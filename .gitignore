@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+data/monitor.db
+data/monitor.db-*
+.venv/
