@@ -1,4 +1,4 @@
-# Net-monit V11.2 — Service & Task Monitoring Quick Reference
+# Net-monit V11.3 — Service & Task Monitoring Quick Reference
 
 **What this guide covers:** how to find the exact names/paths of services and scheduled tasks on your Windows or Linux machines, so you can add them to Net-monit for monitoring.
 

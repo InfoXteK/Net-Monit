@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Net-monit V11.2 Setup Wizard
+title Net-monit V11.3 Setup Wizard
 
 echo.
 echo  ======================================================
-echo   Net-monit V11.2 Setup Wizard
+echo   Net-monit V11.3 Setup Wizard
 echo   Copyright (c) 2024-2026 Abdullah-InfoXtek.com
 echo   Contact: abuabdullah.be@outlook.com
-echo   Default port: 50112
+echo   Default port: 50113
 echo  ======================================================
 echo.
 
@@ -131,7 +131,7 @@ if not exist "%WIZARD%" (
     goto :PSWIZARD
 )
 
-echo [Setup] Launching Net-monit V11.2 Setup Wizard...
+echo [Setup] Launching Net-monit V11.3 Setup Wizard...
 echo [Setup] A window should open shortly. If nothing appears in
 echo [Setup] a few seconds, check for errors printed below.
 echo.
@@ -162,7 +162,7 @@ if not exist "%PS_WIZARD%" (
     echo [ERROR] No setup wizard found anywhere in this package.
     echo         Expected: %WIZARD%
     echo         Expected: %PS_WIZARD%
-    echo         Please re-download/re-extract Net-monit V11.2.
+    echo         Please re-download/re-extract Net-monit V11.3.
     pause
     endlocal
     exit /b 1

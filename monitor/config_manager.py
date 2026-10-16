@@ -1,12 +1,12 @@
 # =============================================================================
-# Net-monit V11.2
+# Net-monit V11.3
 # Copyright (c) 2024-2026 Abdullah. All rights reserved.
 # Contact: abuabdullah.be@outlook.com
 # Unauthorised copying, modification or distribution of this software
 # is strictly prohibited without prior written permission from the author.
 # =============================================================================
 """
-config_manager.py — Net-monit V11.2
+config_manager.py — Net-monit V11.3
 Loads config.yaml into memory; writes back on UI changes.
 Fix (V4.0 from V3.5): _save_config was missing (caused 500 on save notifications/thresholds/escalation).
 """

@@ -1,5 +1,5 @@
 # =============================================================================
-# Net-monit V11.2 -- Threshold metric catalogue (single source of truth)
+# Net-monit V11.3 -- Threshold metric catalogue (single source of truth)
 # Copyright (c) 2024-2026 Abdullah | InfoXtek.com
 # =============================================================================
 """
@@ -14,7 +14,7 @@ Used by:
                                   and server-side validation of every threshold save
   * monitor/email_notifier.py  -> human metric names and units in alert emails
 
-Before V11.2 the Settings screens kept their own copies of the six DEVICE metrics, had no entry for
+Before V11.3 the Settings screens kept their own copies of the six DEVICE metrics, had no entry for
 sites (method "url") and fell back to showing device metrics (CPU, memory, disk ...) for a website.
 Add a metric HERE and every screen, the alert engine and the validation pick it up.
 

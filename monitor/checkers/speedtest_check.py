@@ -1,5 +1,5 @@
 # =============================================================================
-# Net-monit V11.2 -- Speed Test Checker
+# Net-monit V11.3 -- Speed Test Checker
 # Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
 # =============================================================================
 """
@@ -76,7 +76,7 @@ if not hasattr(ssl, "wrap_socket"):
                                     suppress_ragged_eofs=suppress_ragged_eofs)
     ssl.wrap_socket = _wrap_socket_compat
 
-_UA            = "netmonit/11.2"
+_UA            = "netmonit/11.3"
 _DL_SECONDS    = 10.0          # download phase length
 _UL_SECONDS    = 8.0           # upload phase length
 _DL_STREAMS    = 8             # parallel TCP connections, download

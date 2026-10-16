@@ -1,0 +1,1 @@
+01 | V11.3-patch-01 | 2026-10-16 10:49 | Settings > License accepts the whole NM1 key (like the Activation page); result text fixed; About shows applied patches; patch system added

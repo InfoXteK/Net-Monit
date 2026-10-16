@@ -1,6 +1,6 @@
 # =============================================================================
-# Net-monit V11.2 -- URL / Web Application (Sites) Monitor
-# Copyright (c) 2024-2026 Net-monit V11.2 -- Developed by Abdullah -- InfoXtek.com
+# Net-monit V11.3 -- URL / Web Application (Sites) Monitor
+# Copyright (c) 2024-2026 Net-monit V11.3 -- Developed by Abdullah -- InfoXtek.com
 # =============================================================================
 """
 url_check.py
@@ -183,7 +183,7 @@ def check(device: dict) -> dict:
     except Exception as e:
         result["error"] = f"Unexpected error: {e}"
 
-    # -- Side probe (V11.2): DNS / TCP connect / TLS handshake timings + certificate expiry, from ONE extra
+    # -- Side probe (V11.3): DNS / TCP connect / TLS handshake timings + certificate expiry, from ONE extra
     #    connection. Best-effort and isolated: a failed probe (timeout, rate limit, ...) leaves its fields
     #    None -- it can never flip a working site to offline. The ONLY thing it can change is a certificate
     #    confirmed expired on an otherwise reachable site.

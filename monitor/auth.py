@@ -1,12 +1,12 @@
 # =============================================================================
-# Net-monit V11.2
+# Net-monit V11.3
 # Copyright (c) 2024-2026 Abdullah. All rights reserved.
 # Contact: abuabdullah.be@outlook.com
 # Unauthorised copying, modification or distribution of this software
 # is strictly prohibited without prior written permission from the author.
 # =============================================================================
 """
-auth.py  —  Net-monit V11.2
+auth.py  —  Net-monit V11.3
 Two roles:
   admin — full access: dashboard + all config, devices, alerts, user mgmt
   user  — read-only dashboard only (status tiles, no host IPs, no config)

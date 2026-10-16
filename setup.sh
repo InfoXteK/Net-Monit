@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Net-monit V11.2 -- Linux Setup Script
+# Net-monit V11.3 -- Linux Setup Script
 # Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
 # Contact: abuabdullah.be@outlook.com
-# Usage: sudo bash setup.sh [--port 50112] [--path /opt/netmonit-v112] [--svc netmonit-v112]
+# Usage: sudo bash setup.sh [--port 50113] [--path /opt/netmonit-v113] [--svc netmonit-v113]
 # =============================================================================
 set -euo pipefail
 
-APP_VER="V11.2"
-DEFAULT_PORT=50112
-DEFAULT_PATH="/opt/netmonit-v112"
-DEFAULT_SVC="netmonit-v112"
+APP_VER="V11.3"
+DEFAULT_PORT=50113
+DEFAULT_PATH="/opt/netmonit-v113"
+DEFAULT_SVC="netmonit-v113"
 SVC_USER="netmonit"
 
 GREEN="\033[0;32m"; YELLOW="\033[0;33m"; RED="\033[0;31m"
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
         --port) PORT="$2"; shift 2 ;;
         --path) INSTALL_PATH="$2"; shift 2 ;;
         --svc)  SVC_NAME="$2"; shift 2 ;;
-        --help) echo "Usage: sudo bash setup.sh [--port 50112] [--path /opt/netmonit-v112] [--svc netmonit-v112]"; exit 0 ;;
+        --help) echo "Usage: sudo bash setup.sh [--port 50113] [--path /opt/netmonit-v113] [--svc netmonit-v113]"; exit 0 ;;
         *) shift ;;
     esac
 done

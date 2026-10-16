@@ -1,12 +1,12 @@
 # =============================================================================
-# Net-monit V11.2
+# Net-monit V11.3
 # Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
 # Contact: abuabdullah.be@outlook.com
 # Unauthorised copying, modification or distribution is strictly prohibited.
 # =============================================================================
 """
-app.py -- Net-monit V11.2
-Port   : 50112
+app.py -- Net-monit V11.3
+Port   : 50113
 Supports HTTP and HTTPS (set NETMON_SSL_CERT / NETMON_SSL_KEY env vars for HTTPS)
 """
 import json, logging, os, platform, re, time, warnings
@@ -55,8 +55,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("netmonit.app")
 
-APP_VERSION = "11.2"
-APP_PORT    = int(os.environ.get("NETMON_PORT", 50112))
+APP_VERSION = "11.3"
+APP_PORT    = int(os.environ.get("NETMON_PORT", 50113))
 SSL_CERT    = os.environ.get("NETMON_SSL_CERT", "")
 SSL_KEY     = os.environ.get("NETMON_SSL_KEY",  "")
 
@@ -224,9 +224,22 @@ def alerts_page():
         return redirect("/")
     return render_template("alerts.html", active="alerts", version=APP_VERSION)
 
+def _patches_applied():
+    """Patch numbers recorded by apply_patch.py in PATCHES-APPLIED.txt (install root), e.g. ["01", "02"].
+    Lines look like '01 | V11.3-patch-01 | 2026-10-16 | summary'. Missing/unreadable file = no patches."""
+    try:
+        out = []
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "PATCHES-APPLIED.txt"), encoding="utf-8") as fh:
+            for line in fh:
+                n = line.split("|", 1)[0].strip()
+                if n.isdigit(): out.append(n)
+        return out
+    except OSError:
+        return []
+
 @app.route("/about")
 def about_page():
-    return render_template("about.html", active="about", version=APP_VERSION)
+    return render_template("about.html", active="about", version=APP_VERSION, patches=_patches_applied())
 
 @app.route("/admin")
 def admin_page():

@@ -650,8 +650,8 @@
         </div>
         <div style="padding:18px;">
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
-            Enter the 10-character key provided by your administrator.
-            Format: <code style="font-family:monospace;font-size:14px;font-weight:700;letter-spacing:2px;">XXXXX-XXXXX</code>
+            Paste the whole license key your vendor sent you. It starts with <code style="font-family:monospace;font-size:13px;font-weight:700;">NM1-</code>
+            and is about 127 characters long with dashes. Spaces and line breaks are ignored.
           </p>
           <div id="settings-activate-locked" style="display:none;padding:10px 14px;background:rgba(242,164,30,.08);border:1px solid rgba(242,164,30,.25);border-radius:6px;font-size:13px;color:var(--status-warning);margin-bottom:12px;">
             &#128274; Sign in as <strong>Admin</strong> to activate a license key. <a href="#" onclick="window.openLogin&&window.openLogin()" style="color:var(--accent);margin-left:4px;">Sign in</a>
@@ -659,12 +659,12 @@
           <div id="settings-activate-form" style="display:none;">
             <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
               <div style="flex:1;min-width:200px;">
-                <input id="settings-key-input" type="text" maxlength="11" placeholder="XXXXX-XXXXX"
-                  style="width:100%;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:3px;
+                <textarea id="settings-key-input" rows="4" placeholder="NM1-XXXXX-XXXXX-XXXXX-XXXXX-..." spellcheck="false" autocomplete="off"
+                  style="width:100%;font-family:monospace;font-size:14px;font-weight:700;letter-spacing:1px;
                          text-align:center;text-transform:uppercase;border:2px solid var(--border);
-                         border-radius:6px;padding:10px 14px;background:var(--surface);color:var(--text-primary);"
-                  oninput="settFormatKey(this)" onkeydown="if(event.key==='Enter')settActivate()">
-                <p style="font-size:11px;color:var(--text-muted);margin-top:4px;text-align:center;">Letters and digits only</p>
+                         border-radius:6px;resize:vertical;padding:10px 14px;background:var(--surface);color:var(--text-primary);"
+                  oninput="settFormatKey(this)"></textarea>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:4px;text-align:center;">Paste the whole key. Letters and digits only; dashes are added for you.</p>
               </div>
               <button class="btn primary" onclick="settActivate()" id="settings-activate-btn"
                 style="padding:10px 22px;font-size:14px;white-space:nowrap;">
@@ -686,8 +686,8 @@
           <ol style="margin:0;padding-left:20px;font-size:13px;line-height:2.2;color:var(--text-primary);">
             <li>Copy your <strong>Device ID</strong> and <strong>Activation Code</strong> from above.</li>
             <li>Send both values to your license administrator.</li>
-            <li>The administrator opens the <strong>License Key Generator</strong> tool, pastes both values, and generates a <strong>XXXXX-XXXXX</strong> key.</li>
-            <li>Enter that key in the box above and click <strong>Activate</strong>.</li>
+            <li>The administrator opens the <strong>License Key Generator</strong> tool, pastes both values, and generates your license key (it starts with <strong>NM1-</strong> and is about 127 characters long).</li>
+            <li>Paste the <strong>whole</strong> key in the box above and click <strong>Activate</strong>.</li>
           </ol>
           <div style="margin-top:14px;padding:10px 14px;background:var(--surface);border-left:3px solid var(--status-warning);border-radius:0 6px 6px 0;font-size:13px;">
             <strong>Note:</strong> Each key is unique to this server. A key from a different server will not work here.
@@ -717,7 +717,7 @@
       </div>
 
       <div style="text-align:center;font-size:12px;color:var(--text-muted);padding:8px 0 20px;">
-        Net-monit V11.2 · Copyright © 2024–2026 Abdullah | Abdullah-InfoXtek.com &middot;
+        Net-monit V11.3 · Copyright © 2024–2026 Abdullah | Abdullah-InfoXtek.com &middot;
         <a href="mailto:abuabdullah.be@outlook.com" style="color:var(--text-muted);">abuabdullah.be@outlook.com</a>
       </div>
     </div>
@@ -786,7 +786,7 @@
       </div>
 
       <div style="text-align:center;font-size:12px;color:var(--text-muted);padding:20px 0;">
-        Net-monit V11.2 · Copyright © 2024–2026 Abdullah | Abdullah-InfoXtek.com
+        Net-monit V11.3 · Copyright © 2024–2026 Abdullah | Abdullah-InfoXtek.com
       </div>
     </div>
   </div>
@@ -1015,15 +1015,26 @@ function loadSettingsLicense() {
 }
 
 function settFormatKey(el) {
-  let v = el.value.replace(/[^0-9A-Za-z]/g,'').toUpperCase().slice(0,10);
-  if (v.length > 5) v = v.slice(0,5) + '-' + v.slice(5);
-  el.value = v;
+  // Tidy only: drop spaces/line breaks, upper-case, regroup in fives. The server does the real check.
+  let v = el.value.replace(/[^0-9A-Za-z]/g,'').toUpperCase().slice(0,110);
+  let head = v.startsWith('NM1') ? 'NM1-' : '';
+  let rest = head ? v.slice(3) : v;
+  el.value = head + (rest.match(/.{1,5}/g) || []).join('-');
 }
 
 function settActivate() {
   const key = document.getElementById('settings-key-input').value.trim().toUpperCase();
-  if (!key || key.length < 11) {
-    showSettResult(false, 'Please enter a valid XXXXX-XXXXX license key.');
+  const compact = key.replace(/[^0-9A-Z]/g, '');
+  if (compact.length < 10) {
+    showSettResult(false, 'Please paste the license key.');
+    return;
+  }
+  if (compact.length <= 11 && !compact.startsWith('NM1')) {
+    showSettResult(false, 'That is an old-format key (XXXXX-XXXXX). Keys from before V11.0 are no longer accepted; ask your vendor for a new key.');
+    return;
+  }
+  if (compact.length < 100) {
+    showSettResult(false, 'The key looks incomplete (' + compact.length + ' characters, expected 106). Copy and paste the WHOLE key.');
     return;
   }
   const btn = document.getElementById('settings-activate-btn');
@@ -1058,7 +1069,7 @@ function showSettResult(ok, msg) {
   el.style.background = ok ? 'rgba(34,139,34,0.12)' : 'rgba(180,30,30,0.12)';
   el.style.border = ok ? '1px solid #2d7d2d' : '1px solid #7d2d2d';
   el.style.color = ok ? 'var(--status-ok)' : 'var(--status-critical)';
-  el.textContent = (ok ? '&#10003; ' : '&#10008; ') + msg;
+  el.textContent = (ok ? '\u2713 ' : '\u2718 ') + msg;
 }
 
 function copySettField(fieldId, btnId) {

@@ -1,5 +1,5 @@
 # =============================================================================
-# Net-monit V11.2 -- Windows Setup Wizard
+# Net-monit V11.3 -- Windows Setup Wizard
 # Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
 # Contact: abuabdullah.be@outlook.com
 # Run as Administrator
@@ -20,11 +20,11 @@ $script:nextHandler   = $null
 $script:backHandler   = $null
 $script:Config = @{
     AppVersion    = "10.0"
-    InstallPath   = "C:\NetMonit-V11.2"
-    Port          = 50112
+    InstallPath   = "C:\NetMonit-V11.3"
+    Port          = 50113
     PythonExe     = ""
     PythonVersion = ""
-    ServiceName   = "Net_Monit_V112"
+    ServiceName   = "Net_Monit_V113"
     VenvEnabled   = $true
     Firewall      = $true
     AutoStart     = $true
@@ -159,14 +159,14 @@ function Show-Welcome {
     $btnBack.Enabled = $false
     Set-Back $null
 
-    $pnlContent.Controls.Add((New-H1 "Welcome to Net-monit V11.2 Setup"))
+    $pnlContent.Controls.Add((New-H1 "Welcome to Net-monit V11.3 Setup"))
 
     $lines = @(
-        "This wizard installs Net-monit V11.2 on this Windows machine.",
+        "This wizard installs Net-monit V11.3 on this Windows machine.",
         "",
-        "Net-monit V11.2 is a production network monitoring system:",
+        "Net-monit V11.3 is a production network monitoring system:",
         "  - Real-time ping, SNMP, SSH, PowerShell and disk-usage checks",
-        "  - Web dashboard at http://localhost:50112",
+        "  - Web dashboard at http://localhost:50113",
         "  - Multi-level email alert escalation",
         "  - Per-user saved dashboard layouts (grid and list views)",
         "  - 30-day trial license with full-access activation",
@@ -328,7 +328,7 @@ function Show-License {
 
     # EULA as plain string array (NO here-string to avoid parser issues)
     $eulaLines = @(
-        "NET-MONIT V11.2 - END USER LICENSE AGREEMENT",
+        "NET-MONIT V11.3 - END USER LICENSE AGREEMENT",
         "Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com",
         "Contact: abuabdullah.be@outlook.com",
         "",
@@ -336,7 +336,7 @@ function Show-License {
         "",
         "1. GRANT OF LICENSE",
         "   Abdullah-InfoXtek.com grants you a non-exclusive, non-transferable",
-        "   license to install and use Net-monit V11.2 for internal network",
+        "   license to install and use Net-monit V11.3 for internal network",
         "   monitoring on machines you own or operate.",
         "",
         "2. FREE SOFTWARE",
@@ -411,7 +411,7 @@ function Show-Location {
     Set-Step 3
 
     $pnlContent.Controls.Add((New-H1 "Installation Location"))
-    $pnlContent.Controls.Add((New-Lbl "Choose where Net-monit V11.2 will be installed." 28 74))
+    $pnlContent.Controls.Add((New-Lbl "Choose where Net-monit V11.3 will be installed." 28 74))
 
     $pnlContent.Controls.Add((New-Lbl "Install to:" 28 110))
     $txtPath = New-TxtBox 28 132 510 $script:Config.InstallPath
@@ -435,7 +435,7 @@ function Show-Location {
     }
     Update-Disk
 
-    $pnlContent.Controls.Add((New-Lbl "Dashboard port  (default 50112):" 28 206))
+    $pnlContent.Controls.Add((New-Lbl "Dashboard port  (default 50113):" 28 206))
     $nudPort = New-Object Windows.Forms.NumericUpDown
     $nudPort.Minimum   = 1024
     $nudPort.Maximum   = 65535
@@ -538,7 +538,7 @@ function Show-Install {
     $btnNext.Enabled = $false
     $btnBack.Enabled = $false
 
-    $pnlContent.Controls.Add((New-H1 "Installing Net-monit V11.2"))
+    $pnlContent.Controls.Add((New-H1 "Installing Net-monit V11.3"))
 
     $statusLbl = New-Lbl "Preparing..." 28 74 ([Drawing.Color]::FromArgb(190,190,205))
     $statusLbl.AutoSize  = $false
@@ -631,7 +631,7 @@ function Show-Install {
             Add-Log "Files copied from $srcRoot"
         } else {
             Add-Log "Source root not found at $srcRoot -- files not copied." "Yellow"
-            Add-Log "Copy the Net-monit V11.2 folder contents manually to: $ip" "Yellow"
+            Add-Log "Copy the Net-monit V11.3 folder contents manually to: $ip" "Yellow"
         }
     } catch { Add-Log "File copy warning: $_" "Yellow" }
 
@@ -641,7 +641,7 @@ function Show-Install {
         $cfgPath = Join-Path $ip "config.yaml"
         if (-not (Test-Path $cfgPath)) {
             $cfgLines = @(
-                "# Net-monit V11.2 - config.yaml",
+                "# Net-monit V11.3 - config.yaml",
                 "smtp:",
                 "  enabled: false",
                 "  host: smtp-mail.outlook.com",
@@ -743,7 +743,7 @@ function Show-Install {
     if ($script:Config.Firewall) {
         Set-Prog 84 "Adding firewall rule..."
         try {
-            $ruleName = "Net-monit V11.2 Port $($script:Config.Port)"
+            $ruleName = "Net-monit V11.3 Port $($script:Config.Port)"
             netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=TCP localport=$($script:Config.Port) 2>&1 | Out-Null
             Add-Log "Firewall rule added for TCP $($script:Config.Port)"
         } catch { Add-Log "Firewall warning: $_" "Yellow" }
@@ -776,7 +776,7 @@ function Show-Install {
             $desktop = [Environment]::GetFolderPath("Desktop")
             $lnk     = $wsh.CreateShortcut((Join-Path $desktop "Net-monit Dashboard.lnk"))
             $lnk.TargetPath  = "http://localhost:$($script:Config.Port)"
-            $lnk.Description = "Open Net-monit V11.2 Dashboard"
+            $lnk.Description = "Open Net-monit V11.3 Dashboard"
             $lnk.Save()
             Add-Log "Desktop shortcut created"
         } catch { Add-Log "Shortcut warning: $_" "Yellow" }
@@ -785,7 +785,7 @@ function Show-Install {
     # STEP 11: Registry
     Set-Prog 98 "Writing registry entries..."
     try {
-        $rp = "HKLM:\SOFTWARE\NetMonit-V11.2"
+        $rp = "HKLM:\SOFTWARE\NetMonit-V11.3"
         if (-not (Test-Path $rp)) { New-Item -Path $rp -Force | Out-Null }
         Set-ItemProperty -Path $rp -Name "InstallPath"  -Value $ip
         Set-ItemProperty -Path $rp -Name "Version"      -Value $script:Config.AppVersion
@@ -798,7 +798,7 @@ function Show-Install {
 
     Set-Prog 100 "Installation complete."
     Add-Log "======================================================"
-    Add-Log "Net-monit V11.2 installation finished successfully."
+    Add-Log "Net-monit V11.3 installation finished successfully."
     Add-Log "======================================================"
 
     $btnNext.Enabled = $true
@@ -820,7 +820,7 @@ function Show-Finish {
     $pnlContent.Controls.Add($hdr)
 
     $lines = @(
-        "Net-monit V11.2 has been installed successfully.",
+        "Net-monit V11.3 has been installed successfully.",
         "",
         "  Install path : $($script:Config.InstallPath)",
         "  Dashboard    : http://localhost:$($script:Config.Port)",
@@ -860,7 +860,7 @@ function Show-Finish {
 # MAIN FORM
 # ============================================================
 $form = New-Object Windows.Forms.Form
-$form.Text            = "Net-monit V11.2 Setup Wizard"
+$form.Text            = "Net-monit V11.3 Setup Wizard"
 $form.Size            = New-Object Drawing.Size(940, 620)
 $form.MinimumSize     = New-Object Drawing.Size(940, 620)
 $form.StartPosition   = "CenterScreen"
@@ -885,7 +885,7 @@ $lblLogo.Location  = New-Object Drawing.Point(16, 20)
 $pnlSide.Controls.Add($lblLogo)
 
 $lblVer = New-Object Windows.Forms.Label
-$lblVer.Text      = "V11.2 Setup Wizard"
+$lblVer.Text      = "V11.3 Setup Wizard"
 $lblVer.Font      = New-Object Drawing.Font("Segoe UI", 8)
 $lblVer.ForeColor = [Drawing.Color]::FromArgb(90,90,110)
 $lblVer.AutoSize  = $true
@@ -1001,5 +1001,5 @@ $form.Add_Shown({
     $form.Activate()
 })
 
-Write-Host "[INFO] Net-monit V11.2 Setup Wizard starting"
+Write-Host "[INFO] Net-monit V11.3 Setup Wizard starting"
 [Windows.Forms.Application]::Run($form)

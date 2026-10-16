@@ -1,10 +1,10 @@
 # =============================================================================
-# Net-monit V11.2
+# Net-monit V11.3
 # Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
 # Contact: abuabdullah.be@outlook.com
 # =============================================================================
 """
-license.py  --  Net-monit V11.2 Licensing Engine (asymmetric signatures)
+license.py  --  Net-monit V11.3 Licensing Engine (asymmetric signatures)
 
 V11.0 change: licence keys are ED25519 SIGNATURES. This file contains only the PUBLIC key, so it can
 CHECK a key but can never CREATE one. Before V11.0 a shared HMAC secret lived in this file and in the
@@ -128,7 +128,7 @@ def _normalise_key_text(key: str) -> str:
 
 
 def is_legacy_key_format(key: str) -> bool:
-    """True for the pre-V11.2 'XXXXX-XXXXX' keys (10 characters, no NM1 prefix)."""
+    """True for the pre-V11.0 'XXXXX-XXXXX' keys (10 characters, no NM1 prefix)."""
     return bool(re.fullmatch(r"[0-9A-Za-z]{5}-?[0-9A-Za-z]{5}", str(key or "").strip()))
 
 

@@ -1,5 +1,5 @@
 /**
- * dashboard.js — Net-monit V11.2
+ * dashboard.js — Net-monit V11.3
  * Copyright (c) 2024-2026 Abdullah · abuabdullah.be@outlook.com
  *
  * Features:

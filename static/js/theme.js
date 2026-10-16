@@ -1,5 +1,5 @@
 /* =============================================================================
- * Net-monit V11.2
+ * Net-monit V11.3
  * Copyright (c) 2024-2026 Abdullah | Abdullah-InfoXtek.com
  * =============================================================================
  * theme.js — dark/light mode + custom accent colour, shared across every page.

@@ -1,10 +1,10 @@
-# Net-monit V11.2 — Admin Guide
+# Net-monit V11.3 — Admin Guide
 
 This guide covers day-to-day administration: configuring alerts, adding monitored devices/services, managing users, and using the Admin panel. For installation, see the Setup Guide. For a plain end-user walkthrough of the dashboard, see the User Guide.
 
 ## 1. Signing in
 
-Log in with your admin account at `http://<server>:50112`. Admin accounts can see the Admin panel (top nav) and every Settings tab; regular user accounts see the dashboard and monitoring pages but not user management or SMTP/escalation configuration.
+Log in with your admin account at `http://<server>:50113`. Admin accounts can see the Admin panel (top nav) and every Settings tab; regular user accounts see the dashboard and monitoring pages but not user management or SMTP/escalation configuration.
 
 ## 2. Adding devices to monitor
 
