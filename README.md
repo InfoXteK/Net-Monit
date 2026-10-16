@@ -1,4 +1,4 @@
-# Net-monit V11.2
+# Net-monit V11.1
 
 **Self-Hosted Network and Infrastructure Monitoring Platform**
 
@@ -22,7 +22,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
   - TCP port scan (22, 3389, common services)
   - UDP port scan (DNS, SNMP, NTP, TFTP, mDNS, SSDP)
   - Device type detection via SNMP
-  - Gapless port inventory from version 5086 through V11.2
+  - Gapless port inventory from version 5086 through V11.1
 
 - **Device Monitoring**
   - Ping (ICMP response)
@@ -54,22 +54,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
 
 ---
 
-## What's New in V11.2
-
-### Thresholds screen (cleaner, with apply-to-all)
-
-- **Short threshold tables with a "!" help button.** Each metric shows only its name, unit, Enabled, Warning and Critical. Meaning, direction, allowed minimum/maximum, recommended values and the healthy range are in a small **!** beside the metric: point at it to read (stays while the pointer is on it), or click to pin the box open and close it with the **X** (Esc also closes).
-- **Per-device / per-site overrides are grouped into two collapsible categories (Devices, Sites)** with compact chips.
-- **Apply to all devices / Apply to all sites** under each global threshold table: saves the values as the default and removes per-monitor overrides of those metrics.
-- **Apply wait & cooldown to all devices / only devices / only sites** on the Escalation tab and inside every Notify window. Only the timing fields change; contacts, escalation levels and thresholds are untouched.
-- **Settings > Monitors shows "Healthy"** instead of the raw "ok".
-
-### Housekeeping
-
-- The app package no longer contains a `data/FIRST-RUN-ADMIN-TOKEN.txt`. The first-run admin token is generated on first start and written to that file by the app itself.
-- This README no longer claims a fixed default password (removed in V10.0): on first start the app creates `admin@email.com` with a random token, printed once in the console / service log and saved in `data/FIRST-RUN-ADMIN-TOKEN.txt` until first login.
-
-## What Was New in V11.1
+## What's New in V11.1
 
 ### Thresholds (site metrics fixed)
 
@@ -122,7 +107,7 @@ REM Right-click Setup.bat and choose "Run as administrator"
 Setup.bat
 ```
 
-Installs to `C:\NetMonit-V11.2`, registers `Net_Monit_V112` Windows service, opens http://localhost:50112.
+Installs to `C:\NetMonit-V11.1`, registers `Net_Monit_V111` Windows service, opens http://localhost:50111.
 
 ### Linux
 
@@ -131,19 +116,19 @@ chmod +x setup.sh
 sudo bash setup.sh
 ```
 
-Installs to `/opt/netmonit-v112`, registers `netmonit-v112.service`, opens http://localhost:50112.
+Installs to `/opt/netmonit-v111`, registers `netmonit-v111.service`, opens http://localhost:50111.
 
 ### Manual (any OS)
 
 ```bash
 pip install -r requirements.txt
 python app.py
-# Or:  NETMON_PORT=50112 python app.py
+# Or:  NETMON_PORT=50111 python app.py
 ```
 
-Dashboard: **http://localhost:50112** (or whatever port you configured)
+Dashboard: **http://localhost:50111** (or whatever port you configured)
 
-First login: the app creates `admin@email.com` with a **random token** on first start. It is shown once in the console (or `logs\service.log`) and saved in `data/FIRST-RUN-ADMIN-TOKEN.txt`, which the app deletes at your first login. Change it in the Admin Panel straight away.
+Default login: **admin@email.com** / **Admin@54321$** — change immediately on first login.
 
 ---
 
@@ -173,7 +158,7 @@ LicenseKeyGenerator-Python.bat DEVICEID ACTIVATIONCODE
 python LicenseKeyGenerator.py --protect-key
 
 # Create a new key pair (voids all old keys)
-python LicenseKeyGenerator.py --rotate-keys --app-dir "C:\path\to\Net-monit-V11.2"
+python LicenseKeyGenerator.py --rotate-keys --app-dir "C:\path\to\Net-monit-V11.1"
 ```
 
 See **DOC-ProductOwner-Guide** for setup, key rotation, and disaster recovery.
@@ -188,43 +173,70 @@ See **DOC-ProductOwner-Guide** for setup, key rotation, and disaster recovery.
 
 **Data**: Configuration in `config.yaml`, database in `data/monitor.db` (encrypted credentials)
 
-**Deployment**: Windows service (`pythonw.exe` + `install_service.py`) or Linux systemd (`netmonit-v112.service`)
+**Deployment**: Windows service (`pythonw.exe` + `install_service.py`) or Linux systemd (`netmonit-v111.service`)
 
 ---
 
 ## Project Structure
 
 ```
-Net-monit-V11.2/
-├── app.py                              Main Flask application (routes, API)
-├── config.yaml                         Configuration (port, SMTP, intervals, devices)
+Net-monit-V11.1/
+├── app.py                              Main Flask application
+├── config.yaml                         Configuration (port, email, monitoring intervals, etc.)
 ├── requirements.txt                    Python dependencies
 ├── install_service.py                  Windows service installer + service lifecycle
-├── Setup.bat / setup.sh                Windows / Linux setup launchers
-├── Uninstall.bat                       Windows removal (Linux: scripts/linux/uninstall.sh)
-├── CLAUDE.md                           Architecture decisions and lessons for future development
+├── Setup.bat                           Windows setup launcher
+├── setup.sh                            Linux setup launcher
+├── Uninstall.bat / Uninstall.sh        Removal scripts
 ├── monitor/
-│   ├── license.py                      Licensing (verify-only, Ed25519 public key)
-│   ├── threshold_meta.py               Metric catalogue: units, ranges, recommended values
+│   ├── license.py                      Licensing engine (verify-only, Ed25519 public key)
+│   ├── threshold_meta.py               Metric catalogue: units, ranges, recommended values (V11.1)
 │   ├── database.py                     SQLite schema and data layer
-│   ├── auth.py                         Authentication and sessions
-│   ├── scheduler.py                    Polling scheduler
-│   ├── alerts.py                       Threshold evaluation, alert state machine, escalation
-│   ├── email_notifier.py / messaging_gateway.py / notification_templates.py
-│   ├── config_manager.py / crypto.py   Configuration read/write, credential encryption
-│   └── checkers/                       ping, snmp, ssh, powershell, disk_usage, url, service, task,
-│                                       speedtest (built-in engine), network_scan (TCP + UDP)
-├── templates/                          index, devices, settings, admin, alerts, activation, about,
-│                                       speedtest, urlmonitor, networkscan, base
+│   ├── auth.py                         Authentication and session management
+│   ├── scheduler.py                    Polling scheduler for device checks
+│   ├── email_notifier.py               Email alert delivery
+│   ├── alerts.py                       Alert state machine and escalation
+│   ├── config_manager.py               Configuration read/write
+│   ├── crypto.py                       Credential encryption (AES)
+│   └── checkers/                       Device check modules
+│       ├── ping_check.py
+│       ├── snmp_check.py
+│       ├── ssh_check.py
+│       ├── powershell_check.py
+│       ├── disk_usage_check.py
+│       ├── url_check.py
+│       ├── speedtest_check.py          WAN/PC speed testing (built-in engine)
+│       └── network_scan.py             TCP + UDP port scanning
+├── templates/                          Jinja2 HTML templates
+│   ├── base.html                       Base layout (header, sidebar, footer)
+│   ├── dashboard.html
+│   ├── devices.html
+│   ├── settings.html
+│   ├── admin.html
+│   ├── activation.html                 License activation page
+│   ├── speedtest.html                  Speed test UI and results
+│   └── networkscan.html                Network scan UI and results
 ├── static/
-│   ├── css/style.css
-│   └── js/                             dashboard, devices, settings, admin, auth, theme, threshold_ui
-├── setup/                              setup_wizard.py (GUI) and Setup-Windows.ps1
-├── scripts/                            windows/ (service scripts), linux/ (systemd unit, uninstall.sh),
-│                                       purge_old_data.py, windows_metrics.ps1
-├── sql/DOC-Database-Schema.sql
-├── docs/                               Setup, User, Admin, Service & Task guides (.md + .docx)
-├── data/  logs/                        Runtime data (database) and logs
+│   ├── css/
+│   │   ├── base.css                    Global styles
+│   │   └── [component].css
+│   └── js/
+│       ├── threshold_ui.js             Shared threshold table (V11.1)
+│       ├── base.js                     Global scripts
+│       └── [component].js
+├── docs/
+│   ├── DOC-Setup-Guide.md / .docx
+│   ├── DOC-User-Guide.md / .docx
+│   ├── DOC-Admin-Guide.md / .docx
+│   ├── DOC-Service-Task-Monitoring-Guide.md / .docx
+│   └── CLAUDE.md                       Architecture and development history (13 lessons)
+└── scripts/
+    ├── windows/
+    │   ├── Setup-Windows.ps1           GUI setup wizard (7 pages)
+    │   └── (installer scripts)
+    └── linux/
+        ├── netmonit-v111.service       systemd unit file
+        └── install-dependencies.sh
 ```
 
 ---
@@ -233,7 +245,7 @@ Net-monit-V11.2/
 
 Edit `config.yaml` to customize:
 
-- **Port**: `server: port: 50112`
+- **Port**: `server: port: 50111`
 - **Email alerts**: `smtp: host, port, username, password`
 - **Speed test**: `speedtest: engine: builtin` (default) or `auto` (use speedtest-cli library if available)
 - **Speed test target**: `speedtest: targets:` for nearby LibreSpeed-compatible servers (optional)
@@ -249,7 +261,7 @@ Edit `config.yaml` to customize:
 | DOC-User-Guide | Markdown + Word | Dashboard overview, monitoring devices, managing alerts, dashboard layout |
 | DOC-Admin-Guide | Markdown + Word | User management, SMTP, audit log, licensing, licensing background |
 | DOC-Service-Task-Monitoring-Guide | Markdown + Word | Windows services and scheduled tasks monitoring |
-| CLAUDE.md | Markdown | Architecture decisions, design patterns, the numbered lessons for future development |
+| CLAUDE.md | Markdown | Architecture decisions, design patterns, 13 lessons for future development |
 | DOC-ProductOwner-Guide | Markdown + Word (owner-only) | Key generation, key rotation, passphrase protection, disaster recovery |
 
 ---
