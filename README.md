@@ -1,4 +1,4 @@
-# Net-monit V11.1
+# Net-monit V11.3.1
 
 **Self-Hosted Network and Infrastructure Monitoring Platform**
 
@@ -22,7 +22,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
   - TCP port scan (22, 3389, common services)
   - UDP port scan (DNS, SNMP, NTP, TFTP, mDNS, SSDP)
   - Device type detection via SNMP
-  - Gapless port inventory from version 5086 through V11.1
+  - Gapless port inventory from version 5086 through V11.3.1
 
 - **Device Monitoring**
   - Ping (ICMP response)
@@ -54,7 +54,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
 
 ---
 
-## What's New in V11.1
+## What's New in V11.3.1
 
 ### Thresholds (site metrics fixed)
 
@@ -107,7 +107,7 @@ REM Right-click Setup.bat and choose "Run as administrator"
 Setup.bat
 ```
 
-Installs to `C:\NetMonit-V11.1`, registers `Net_Monit_V111` Windows service, opens http://localhost:50111.
+Installs to `C:\NetMonit-V11.3.1`, registers `Net_Monit_V111` Windows service, opens http://localhost:50111.
 
 ### Linux
 
@@ -158,7 +158,7 @@ LicenseKeyGenerator-Python.bat DEVICEID ACTIVATIONCODE
 python LicenseKeyGenerator.py --protect-key
 
 # Create a new key pair (voids all old keys)
-python LicenseKeyGenerator.py --rotate-keys --app-dir "C:\path\to\Net-monit-V11.1"
+python LicenseKeyGenerator.py --rotate-keys --app-dir "C:\path\to\Net-monit-V11.3.1"
 ```
 
 See **DOC-ProductOwner-Guide** for setup, key rotation, and disaster recovery.
@@ -180,7 +180,7 @@ See **DOC-ProductOwner-Guide** for setup, key rotation, and disaster recovery.
 ## Project Structure
 
 ```
-Net-monit-V11.1/
+Net-monit-V11.3.1/
 ├── app.py                              Main Flask application
 ├── config.yaml                         Configuration (port, email, monitoring intervals, etc.)
 ├── requirements.txt                    Python dependencies
@@ -190,7 +190,7 @@ Net-monit-V11.1/
 ├── Uninstall.bat / Uninstall.sh        Removal scripts
 ├── monitor/
 │   ├── license.py                      Licensing engine (verify-only, Ed25519 public key)
-│   ├── threshold_meta.py               Metric catalogue: units, ranges, recommended values (V11.1)
+│   ├── threshold_meta.py               Metric catalogue: units, ranges, recommended values (V11.3.1)
 │   ├── database.py                     SQLite schema and data layer
 │   ├── auth.py                         Authentication and session management
 │   ├── scheduler.py                    Polling scheduler for device checks
@@ -221,7 +221,7 @@ Net-monit-V11.1/
 │   │   ├── base.css                    Global styles
 │   │   └── [component].css
 │   └── js/
-│       ├── threshold_ui.js             Shared threshold table (V11.1)
+│       ├── threshold_ui.js             Shared threshold table (V11.3.1)
 │       ├── base.js                     Global scripts
 │       └── [component].js
 ├── docs/
