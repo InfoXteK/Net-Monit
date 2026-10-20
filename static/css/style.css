@@ -1162,3 +1162,12 @@ html, body, .sidebar, .main, .card, .topbar, input, select, textarea, button {
 .thr-sec:first-of-type { border-top:none; }
 .apply-timing { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:12.5px; }
 .apply-timing .lbl { color:var(--text-secondary); font-weight:600; }
+
+/* V11.3 patch 03: Devices | Sites switch on the Thresholds tab -- only the chosen category is shown */
+.thr-switch { display:inline-flex; gap:0; margin:0 0 14px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.thr-switch button { border:0; border-right:1px solid var(--border); background:var(--bg-hover); color:var(--text-secondary); padding:9px 26px; font:inherit; font-weight:700; cursor:pointer; }
+.thr-switch button:last-child { border-right:0; }
+.thr-switch button.active, .thr-switch button[aria-selected="true"] { background:var(--accent); color:#fff; }
+.thr-switch .thr-n { font-weight:600; opacity:.85; margin-left:4px; }
+#thr-root[data-view="devices"] [data-scope="sites"],
+#thr-root[data-view="sites"] [data-scope="devices"] { display:none; }

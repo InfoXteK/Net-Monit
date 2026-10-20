@@ -102,6 +102,22 @@
   <!-- ═══ ESCALATION ═══ -->
   <div id="tab-escalation" class="stab-panel">
     <div class="card">
+      <h2 class="card-title">Offline detection (stops false &ldquo;offline&rdquo; alerts)</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+        A device or site is reported <strong>Offline</strong> only after the check <em>failed every time it was re-tried</em>
+        <strong>and</strong> this happened on several checks in a row. One lost packet, one slow DNS answer or one
+        busy moment never raises an Offline alert. While a failure is not yet confirmed, the last status stays on the dashboard.
+      </p>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;">
+        <label style="font-size:13px;">Re-checks before giving up<br><input type="number" id="od-retries" min="0" max="5" style="width:90px"> <span style="color:var(--text-muted)">(0&ndash;5)</span></label>
+        <label style="font-size:13px;">Seconds between re-checks<br><input type="number" id="od-delay" min="1" max="30" style="width:90px"> <span style="color:var(--text-muted)">(1&ndash;30)</span></label>
+        <label style="font-size:13px;">Failed checks in a row to confirm Offline<br><input type="number" id="od-confirm" min="1" max="10" style="width:90px"> <span style="color:var(--text-muted)">(1&ndash;10)</span></label>
+        <button type="button" class="btn primary" onclick="saveOfflineDetection()">Save</button>
+        <span id="od-status" style="font-size:13px;"></span>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Default 2 / 3 / 2. Example with the defaults and a 30-second check interval: Offline is confirmed after about 1&ndash;2 minutes of real silence, then the <em>Alert trigger mode</em> wait below still applies before anyone is emailed.</p>
+    </div>
+    <div class="card" style="margin-top:16px;">
       <h2 class="card-title">Global Escalation Defaults</h2>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
         Toggle each level ON to enable it. Default is <strong>all levels OFF</strong> for all devices.
@@ -309,22 +325,24 @@
     </div>
   </div>
   <div id="tab-thresholds" class="stab-panel">
-    <div class="card">
-      <h2 class="card-title">Global Threshold Defaults</h2>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
-        Devices and sites without their own override use these values. Each metric shows its unit, which direction triggers an alert, the allowed minimum/maximum and the recommended values. The per-device table further down shows what is actually active for each device or site (bold = overridden).
-      </p>
-      <div id="global-thresh-wrap"><div style="color:var(--text-muted);padding:12px">Loading metrics\u2026</div></div>
-      <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
-        <button id="btn-save-thresh" class="btn primary">Save all defaults</button>
-        <button id="btn-reset-thresh" class="btn secondary">Fill recommended values (all)</button>
-        <span id="s-thresh-status" style="font-size:13px;"></span>
+    <div id="thr-root" data-view="devices">
+      <div class="thr-switch" role="tablist" aria-label="Threshold category">
+        <button type="button" role="tab" id="thr-tab-devices" aria-selected="true" class="active" onclick="setThrView('devices')">Devices <span class="thr-n" id="thr-n-devices"></span></button>
+        <button type="button" role="tab" id="thr-tab-sites" aria-selected="false" onclick="setThrView('sites')">Sites <span class="thr-n" id="thr-n-sites"></span></button>
       </div>
-    </div>
-    <div class="card" style="margin-top:16px;">
-      <h2 class="card-title">Per-device / per-site threshold overrides</h2>
-      <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">Grouped by category. Bold values are overridden for that monitor; grey values come from the defaults above. Click a group to collapse it.</p>
-      <div id="thresh-device-groups"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading…</div></div>
+      <div class="card">
+        <h2 class="card-title">Global threshold defaults</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Choose <strong>Devices</strong> or <strong>Sites</strong> above. You see that category's defaults and, underneath, every monitor of that category with its own overrides. Monitors without an override use these defaults.
+        </p>
+        <div id="global-thresh-wrap"><div style="color:var(--text-muted);padding:12px">Loading metrics…</div></div>
+        <div id="s-thresh-status" style="font-size:13px;margin-top:10px;min-height:18px;"></div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h2 class="card-title">Per-monitor threshold details</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">Bold values are overridden for that monitor; grey values come from the defaults above. Use <strong>Edit</strong> to change a monitor's own values.</p>
+        <div id="thresh-device-groups"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading…</div></div>
+      </div>
     </div>
   </div>
 

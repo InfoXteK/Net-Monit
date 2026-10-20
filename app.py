@@ -28,6 +28,7 @@ from monitor import email_notifier
 from monitor import messaging_gateway
 from monitor import notification_templates
 from monitor import threshold_meta
+from monitor import alerts as alerts_engine
 from monitor import auth
 from monitor.license import license_manager
 
@@ -1169,6 +1170,38 @@ def api_apply_esc_all():
     return jsonify({"ok":True,"count":len(cfg.get("devices",[]))})
 
 
+# ── V11.3 patch 03: offline-detection settings (fewer false "offline" alerts) ──────────────────────
+@app.route("/api/settings/offline-detection", methods=["GET"])
+def api_get_offline_detection():
+    err = _require_admin()
+    if err: return err
+    r, d, c = sched.offline_settings({})
+    return jsonify({"offline_retries": r, "offline_retry_delay_sec": d, "offline_confirm_polls": c,
+                    "limits": {k: list(v) for k, v in sched._OFFLINE_LIMITS.items()}})
+
+@app.route("/api/settings/offline-detection", methods=["POST"])
+def api_set_offline_detection():
+    """Body {offline_retries 0-5, offline_retry_delay_sec 1-30, offline_confirm_polls 1-10}. A device is called
+    OFFLINE only after every re-check failed AND that happened on `offline_confirm_polls` polls in a row."""
+    err = _require_admin()
+    if err: return err
+    b = request.get_json(force=True) or {}
+    clean = {}
+    for key, (lo, hi) in sched._OFFLINE_LIMITS.items():
+        try:
+            n = int(b.get(key))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": f"{key} must be a whole number."}), 400
+        if n < lo or n > hi:
+            return jsonify({"ok": False, "error": f"{key} must be between {lo} and {hi}."}), 400
+        clean[key] = n
+    cfg = config_manager.get_config()
+    cfg.setdefault("defaults", {}).update(clean)
+    config_manager.save_config(cfg)
+    db.audit_log(_email(), "set_offline_detection", "defaults", ", ".join(f"{k}={v}" for k, v in clean.items()))
+    return jsonify({"ok": True, **clean})
+
+
 # ── V11.2: apply-to-all helpers + endpoints ───────────────────────────────
 def _is_site(device):
     return (device.get("method") or "") == "url"
@@ -1962,6 +1995,15 @@ def api_urlmonitor_results():
         saved = cfg_by_id.get(r["device_id"], {})
         r["url_config"] = saved.get("url_config", {})
         r["poll_interval_seconds"] = saved.get("poll_interval_seconds", 60)
+        # V11.3 patch 02: colour the Sites table with the SAME thresholds the alert engine uses
+        try:
+            eff = alerts_engine.effective_thresholds({**saved, "id": r["device_id"]}, config_manager.effective_global_thresholds(),
+                                              db.get_device_notify(r["device_id"]))
+            for mk, rk in (("ssl_days_left", "ssl_state"), ("response_ms", "response_state")):
+                if r["metrics"].get(mk) is not None:
+                    r[rk] = alerts_engine.evaluate_metric_state(r["metrics"][mk], eff.get(mk))
+        except Exception as exc:                      # the page still works with its fallback colours
+            app.logger.warning("Sites row state for %s failed: %s", r.get("device_id"), exc)
 
     # Also include configured URL devices that haven't reported status yet
     polled_ids = {r["device_id"] for r in url_rows}

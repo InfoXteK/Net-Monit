@@ -192,7 +192,9 @@ function renderSites(rows) {
       const ago = r.last_checked ? Math.round((Date.now()/1000 - r.last_checked)/60) + 'm ago' : '--';
       let ssl = 'N/A';
       if (m.ssl_days_left != null) {
-        const color = m.ssl_days_left<=7 ? 'var(--status-critical)' : m.ssl_days_left<=30 ? 'var(--status-warning)' : 'var(--status-ok)';
+        // V11.3 patch 02: the server colours it from YOUR thresholds (ssl_state); the fixed 7/30 is only a fallback.
+        const st = r.ssl_state || (m.ssl_days_left<=7 ? 'critical' : m.ssl_days_left<=30 ? 'warning' : 'ok');
+        const color = st==='critical' ? 'var(--status-critical)' : st==='warning' ? 'var(--status-warning)' : 'var(--status-ok)';
         ssl = '<span style="color:'+color+'">' + m.ssl_days_left + 'd</span>';
       }
       const resp = m.response_ms != null ? m.response_ms + 'ms' : '--';

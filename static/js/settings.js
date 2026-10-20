@@ -174,6 +174,7 @@ async function loadNotifDeviceTable(){
 const ESC_GLOBAL = { l1:false, l2:false, l3:false };
 
 async function loadEscTab(){
+  loadOfflineDetection();
   try{
     const gr=await fetch("/api/admin/email-groups",{headers:{"X-Session-Token":getSession()}});
     if(gr.ok){ const g=await gr.json(); _allKnownEmails=g.all_emails||[]; }
@@ -861,6 +862,7 @@ async function resetTmpl(){
 ═══════════════════════════════════════════════════════════ */
 let _globalThresh={};
 async function loadThreshTab(){
+  setThrView(thrView());
   try{
     const r=await fetch("/api/settings/thresholds",{headers:{"X-Session-Token":getSession()}});
     _globalThresh=r.ok?await r.json():{};
@@ -874,32 +876,40 @@ async function renderGlobalThreshTable(){
   let meta;
   try{ meta=await ThrUI.load(); }
   catch(e){ wrap.innerHTML='<div style="color:var(--status-critical);padding:12px">Could not load the metric list from the server ('+ThrUI.esc(e.message)+'). Reload the page.</div>'; return; }
-  const sect=(title,sub,keys,scope,noun)=>`<div class="thr-sec" data-scope="${scope}">
-    <h3 style="font-size:14px;margin:6px 0 2px">${title}</h3>
+  const sect=(title,sub,keys,scope,noun)=>{ const one=noun==="devices"?"device":"site"; return `<div class="thr-sec" data-scope="${scope}">
+    <h3 style="font-size:15px;margin:2px 0 2px">${title}</h3>
     <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">${sub} Hover or click the <span class="thr-i" style="pointer-events:none">!</span> beside a metric for its meaning, allowed range and recommended values.</p>
     <div style="overflow-x:auto">${ThrUI.tableHTML(meta,keys,_globalThresh,GT_IDS,{wait:false})}</div>
     <div class="thr-actions">
+      <button type="button" class="btn primary" id="btn-save-thr-${scope}" onclick="saveGlobalThresh('${scope}')">Save ${one} defaults</button>
       <button type="button" class="btn secondary" id="btn-apply-thr-${scope}" onclick="applyThreshToAll('${scope}')">Apply to all ${noun}</button>
-      <span style="font-size:12px;color:var(--text-muted)">Saves these ${noun==="devices"?"device":"site"} values as the default and removes every per-${noun==="devices"?"device":"site"} override of them, so all ${noun} use these values.</span>
-    </div></div>`;
+      <button type="button" class="btn secondary" id="btn-reset-thr-${scope}" onclick="resetGlobalThresh('${scope}')">Fill recommended values</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0"><strong>Save</strong> keeps these as the defaults. <strong>Apply to all ${noun}</strong> also removes every per-${one} override of these metrics, so all ${noun} use these values.</p>
+  </div>`; };
   wrap.innerHTML=
     sect("Device metrics","Used by monitored devices: ping, SNMP, SSH, PowerShell, disk.",meta.device_metrics,"devices","devices")+
     sect("Website (site) metrics","Used by every site on the Sites page: response time, SSL certificate days left, SSL handshake, DNS lookup and TCP connect.",meta.site_metrics,"sites","sites");
 }
-async function saveGlobalThresh(){
+async function saveGlobalThresh(scope){
   const meta=ThrUI.get();
   if(!meta){setStatus("s-thresh-status","Metric list not loaded yet",false);return;}
-  const {thresholds,errors}=ThrUI.collect(meta,[...meta.device_metrics,...meta.site_metrics],GT_IDS,{wait:false});
+  // scope "devices" / "sites" saves only that category's table and keeps the other category's saved values;
+  // no scope (older callers) saves both tables.
+  const keys=scope==="sites"?meta.site_metrics:scope==="devices"?meta.device_metrics:[...meta.device_metrics,...meta.site_metrics];
+  const {thresholds,errors}=ThrUI.collect(meta,keys,GT_IDS,{wait:false});
   if(errors.length){ setStatus("s-thresh-status",errors[0],false); return; }
-  const r=await fetch("/api/settings/thresholds",{method:"POST",headers:authHeaders(),body:JSON.stringify(thresholds)});
+  let body=thresholds;
+  if(scope){ body={}; for(const k in _globalThresh){ if(!keys.includes(k)) body[k]=_globalThresh[k]; } Object.assign(body,thresholds); }
+  const r=await fetch("/api/settings/thresholds",{method:"POST",headers:authHeaders(),body:JSON.stringify(body)});
   if(!r.ok){
     let msg=`Save failed (${r.status})`;
     try{ const j=await r.json(); if(j&&j.error) msg=j.error; }catch(_){}
     setStatus("s-thresh-status",msg,false);
     return;
   }
-  _globalThresh=thresholds;
-  setStatus("s-thresh-status","Saved \u2713",true);
+  _globalThresh=body;
+  setStatus("s-thresh-status","Saved \u2713"+(scope?" ("+scope+")":""),true);
   loadThreshDeviceTable();
 }
 async function applyThreshToAll(scope){
@@ -917,10 +927,19 @@ async function applyThreshToAll(scope){
   setStatus("s-thresh-status","Applied to "+j.count+" "+noun+" \u2713 ("+j.overrides_removed+" override"+(j.overrides_removed===1?"":"s")+" removed)",true);
   await loadThreshTab();
 }
-function resetGlobalThresh(){
+function resetGlobalThresh(scope){
   const meta=ThrUI.get(); if(!meta) return;
-  ThrUI.fillRecommended(meta,[...meta.device_metrics,...meta.site_metrics],GT_IDS);
-  setStatus("s-thresh-status","Reset to recommended values \u2014 click Save to persist",true);
+  const keys=scope==="sites"?meta.site_metrics:scope==="devices"?meta.device_metrics:[...meta.device_metrics,...meta.site_metrics];
+  ThrUI.fillRecommended(meta,keys,GT_IDS);
+  setStatus("s-thresh-status","Filled with the recommended values \u2014 click Save (or Apply to all) to keep them",true);
+}
+// V11.3 patch 03: Devices | Sites switch. Only the chosen category's defaults and monitors are shown (CSS keys off data-view).
+function thrView(){ try{ return sessionStorage.getItem("thr-view")==="sites"?"sites":"devices"; }catch(_){ return "devices"; } }
+function setThrView(view){
+  view=view==="sites"?"sites":"devices";
+  const root=v("thr-root"); if(root) root.setAttribute("data-view",view);
+  ["devices","sites"].forEach(k=>{ const b=v("thr-tab-"+k); if(b){ b.setAttribute("aria-selected",k===view?"true":"false"); b.classList.toggle("active",k===view); } });
+  try{ sessionStorage.setItem("thr-view",view); }catch(_){}
 }
 async function loadThreshDeviceTable(){
   try{
@@ -942,7 +961,7 @@ async function loadThreshDeviceTable(){
         <td><button class="btn secondary small" onclick="openSettNotify('${esc(d.id)}','${esc(d.name)}')">Edit</button></td>
       </tr>`;
     };
-    const cat=(title,list,open)=>`<details class="thr-cat"${open?" open":""}>
+    const cat=(title,list,open,scope)=>`<details class="thr-cat" data-scope="${scope}"${open?" open":""}>
       <summary>${title}<span class="thr-cat-count">${list.length} monitor${list.length===1?"":"s"}</span></summary>
       <div style="overflow-x:auto"><table class="data-table" style="margin:0">
         <thead><tr><th>Name</th><th>Type</th><th>Active thresholds \u2014 warning/critical (bold = overridden)</th><th>Edit</th></tr></thead>
@@ -951,7 +970,8 @@ async function loadThreshDeviceTable(){
     const byType=(a,b)=>String(a.method||"").localeCompare(String(b.method||""))||String(a.name||"").localeCompare(String(b.name||""));
     const devs=devices.filter(d=>(d.method||"")!=="url").sort(byType);
     const sites=devices.filter(d=>(d.method||"")==="url").sort(byType);
-    host.innerHTML=devices.length?(cat("\uD83D\uDDA5 Devices",devs,true)+cat("\uD83C\uDF10 Sites",sites,true)):
+    const nd=v("thr-n-devices"), ns=v("thr-n-sites"); if(nd) nd.textContent="("+devs.length+")"; if(ns) ns.textContent="("+sites.length+")";
+    host.innerHTML=devices.length?(cat("\uD83D\uDDA5 Devices",devs,true,"devices")+cat("\uD83C\uDF10 Sites",sites,true,"sites")):
       `<div style="color:var(--text-muted);text-align:center;padding:16px">No devices or sites yet</div>`;
   }catch(e){}
 }
@@ -1667,8 +1687,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   v("btn-save-notif")      ?.addEventListener("click",saveNotif);
   v("btn-save-esc-global") ?.addEventListener("click",saveEscGlobal);
   v("btn-apply-esc-all")   ?.addEventListener("click",applyEscToAll);
-  v("btn-save-thresh")     ?.addEventListener("click",saveGlobalThresh);
-  v("btn-reset-thresh")    ?.addEventListener("click",resetGlobalThresh);
   v("su-token")            ?.addEventListener("input",suCheckToken);
   v("btn-sett-add-device") ?.addEventListener("click",settingsAddDevice);
   v("qd-method")           ?.addEventListener("change",renderQdMethodFields);
@@ -1684,4 +1702,24 @@ async function applyTimingBtn(scope, prefix){
     showToast(res.message, res.ok?"success":"error");
     if(res.ok){ loadEscDeviceTable(); }
   }catch(e){ showToast("Apply failed: "+e.message,"error"); }
+}
+
+// V11.3 patch 03: Offline detection settings (Escalation tab)
+async function loadOfflineDetection(){
+  try{
+    const r=await fetch("/api/settings/offline-detection",{headers:{"X-Session-Token":getSession()}});
+    if(!r.ok) return; const d=await r.json();
+    const set=(id,val)=>{ const e=v(id); if(e) e.value=val; };
+    set("od-retries",d.offline_retries); set("od-delay",d.offline_retry_delay_sec); set("od-confirm",d.offline_confirm_polls);
+  }catch(_){}
+}
+async function saveOfflineDetection(){
+  const num=(id)=>parseInt((v(id)||{}).value);
+  const body={offline_retries:num("od-retries"),offline_retry_delay_sec:num("od-delay"),offline_confirm_polls:num("od-confirm")};
+  try{
+    const r=await fetch("/api/settings/offline-detection",{method:"POST",headers:authHeaders(),body:JSON.stringify(body)});
+    let j={}; try{ j=await r.json(); }catch(_){}
+    if(!r.ok||!j.ok){ setStatus("od-status",(j&&j.error)||("Save failed ("+r.status+")"),false); return; }
+    setStatus("od-status","Saved \u2713 \u2014 applies from the next check",true);
+  }catch(e){ setStatus("od-status","Save failed: "+e.message,false); }
 }
