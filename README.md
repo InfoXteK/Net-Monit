@@ -1,4 +1,4 @@
-# Net-monit V11.3.1
+# Net-monit V11.3.3
 
 **Self-Hosted Network and Infrastructure Monitoring Platform**
 
@@ -22,7 +22,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
   - TCP port scan (22, 3389, common services)
   - UDP port scan (DNS, SNMP, NTP, TFTP, mDNS, SSDP)
   - Device type detection via SNMP
-  - Gapless port inventory from version 5086 through V11.3.1
+  - Gapless port inventory from version 5086 through V11.3.3
 
 - **Device Monitoring**
   - Ping (ICMP response)
@@ -54,7 +54,7 @@ Net-monit is a self-hosted, on-premises network and infrastructure monitoring so
 
 ---
 
-## What's New in V11.3.1
+## What's New in V11.3.3
 
 ### Thresholds (site metrics fixed)
 
