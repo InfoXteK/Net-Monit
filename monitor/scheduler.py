@@ -10,8 +10,10 @@ scheduler.py  —  Net-monit V11.3
 APScheduler background polling. Each device runs in its own interval job.
 """
 import logging
+import threading
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor
 from . import database as db
 from . import alerts
 from . import crypto
@@ -19,6 +21,78 @@ from .checkers import ping_check, snmp_check, powershell_check, ssh_check, disk_
 
 log = logging.getLogger("monitor.scheduler")
 _scheduler = None
+
+
+_OFFLINE_DEFAULTS = {"offline_retries": 2, "offline_retry_delay_sec": 3, "offline_confirm_polls": 2}
+_OFFLINE_LIMITS   = {"offline_retries": (0, 5), "offline_retry_delay_sec": (1, 30), "offline_confirm_polls": (1, 10)}
+_fail_streak = {}                 # device id -> consecutive polls (each already retried) that found it unreachable
+_streak_lock = threading.Lock()
+_POLL_ERROR_HOLD = 5              # consecutive MONITORING errors (checker crashed) before one is shown as a problem
+
+
+class _UnknownMethod(Exception):
+    pass
+
+
+def offline_settings(device, app_cfg=None):
+    """(retries, retry_delay_sec, confirm_polls) for one device: device override > live config defaults > built-in,
+    always clamped to a sane range so a typo in config.yaml can never disable polling."""
+    try:
+        from . import config_manager
+        defaults = config_manager.get_config().get("defaults", {}) or {}
+    except Exception:
+        defaults = (app_cfg or {}).get("defaults", {}) or {}
+    out = []
+    for key in ("offline_retries", "offline_retry_delay_sec", "offline_confirm_polls"):
+        raw = device.get(key, defaults.get(key, _OFFLINE_DEFAULTS[key]))
+        lo, hi = _OFFLINE_LIMITS[key]
+        try:
+            val = int(raw)
+        except (TypeError, ValueError):
+            val = _OFFLINE_DEFAULTS[key]
+        out.append(max(lo, min(hi, val)))
+    return tuple(out)
+
+
+def _primary_check(device, app_cfg, method, host, did):
+    """ONE attempt of the device's primary check. Returns the metrics dict; raises on a monitoring error."""
+    if method == "ping":
+        timeout_ms = device.get("ping_timeout_ms",
+                     app_cfg.get("defaults", {}).get("ping_timeout_ms", 1000))
+        return ping_check.check(host, timeout_ms=timeout_ms)
+    if method == "snmp":
+        sc = device.get("snmp", {})
+        return snmp_check.check(
+            host,
+            community=sc.get("community", "public"),
+            version=sc.get("version", 2),
+            interfaces=sc.get("interfaces"),
+        )
+    if method == "powershell":
+        pc = device.get("powershell", {})
+        return powershell_check.check(
+            host,
+            remote=pc.get("remote", False),
+            use_winrm=pc.get("use_winrm", False),
+            username=pc.get("username"),
+            password=pc.get("password"),
+        )
+    if method == "ssh":
+        sc = device.get("ssh", {})
+        return ssh_check.check(
+            host,
+            port=sc.get("port", 22),
+            username=sc.get("username", "monitor"),
+            password=sc.get("password"),
+            key_path=sc.get("key_path"),
+        )
+    if method == "disk_usage":
+        return disk_usage_check.check(device)
+    if method == "url":
+        return url_check.check(device)
+    if method == "speedtest":
+        return speedtest_check.check(device)
+    raise _UnknownMethod(method)
 
 
 def _poll_device(device, app_cfg):
@@ -29,75 +103,48 @@ def _poll_device(device, app_cfg):
     host   = device["host"]
     method = device.get("method", "ping")
 
-    try:
-        if method == "ping":
-            timeout_ms = device.get("ping_timeout_ms",
-                         app_cfg.get("defaults", {}).get("ping_timeout_ms", 1000))
-            metrics = ping_check.check(host, timeout_ms=timeout_ms)
-
-        elif method == "snmp":
-            sc = device.get("snmp", {})
-            metrics = snmp_check.check(
-                host,
-                community=sc.get("community", "public"),
-                version=sc.get("version", 2),
-                interfaces=sc.get("interfaces"),
-            )
-
-        elif method == "powershell":
-            pc = device.get("powershell", {})
-            metrics = powershell_check.check(
-                host,
-                remote=pc.get("remote", False),
-                use_winrm=pc.get("use_winrm", False),
-                username=pc.get("username"),
-                password=pc.get("password"),
-            )
-
-        elif method == "ssh":
-            sc = device.get("ssh", {})
-            metrics = ssh_check.check(
-                host,
-                port=sc.get("port", 22),
-                username=sc.get("username", "monitor"),
-                password=sc.get("password"),
-                key_path=sc.get("key_path"),
-            )
-
-        elif method == "disk_usage":
-            metrics = disk_usage_check.check(device)
-
-        elif method == "url":
-            metrics = url_check.check(device)
-            # V10.1: evaluate_device() (monitor/alerts.py) has no
-            # consecutive-failure confirmation anywhere -- ANY single
-            # unreachable result flips status to "offline" and fires an
-            # alert immediately, for every device method, by design
-            # elsewhere in that file (out of scope to change here, and
-            # CLAUDE.md specifically warns that file is the most
-            # bug-prone -- trace the full call chain before touching it).
-            # URL checks are the method most exposed to a one-off transient
-            # failure: a momentary CDN/WAF hiccup, a DNS resolver retry, an
-            # upstream restart that clears in a couple of seconds -- exactly
-            # the "site's actually fine, Net-monit just caught it mid-blip"
-            # complaint. One quick in-process retry before accepting
-            # "unreachable" catches that case without touching alerts.py or
-            # adding new schema/config. A genuinely-down site still fails
-            # both checks and is still reported offline, still alerts.
-            if not metrics.get("reachable"):
-                time.sleep(2)
-                metrics = url_check.check(device)
-
-        elif method == "speedtest":
-            metrics = speedtest_check.check(device)
-
-        else:
+    # V11.3 patch 03 -- no false OFFLINE alerts. A device is only reported offline when
+    #   1) the check failed on every one of (retries + 1) attempts, a few seconds apart, AND
+    #   2) that happened on `confirm_polls` polls in a row.
+    # A checker that CRASHED (our own error, not "no reply") is never reported as a device being offline unless it
+    # keeps happening (_POLL_ERROR_HOLD polls in a row). While a failure is unconfirmed the previous status is kept.
+    retries, retry_delay, confirm_polls = offline_settings(device, app_cfg)
+    attempts = 1 if method == "speedtest" else retries + 1
+    metrics = None
+    for attempt in range(attempts):
+        try:
+            metrics = _primary_check(device, app_cfg, method, host, did)
+        except _UnknownMethod:
             log.warning("Unknown method '%s' for device %s", method, did)
             return
+        except Exception as exc:
+            log.error("Poll error %s (attempt %d/%d): %s", did, attempt + 1, attempts, exc)
+            metrics = {"reachable": False, "error": str(exc), "poll_error": True}
+        if metrics.get("reachable") or method == "speedtest":
+            break
+        if attempt < attempts - 1:
+            time.sleep(retry_delay)
+    if attempt:
+        metrics["attempts"] = attempt + 1          # only recorded when a re-check was needed
 
-    except Exception as exc:
-        log.error("Poll error %s: %s", did, exc)
-        metrics = {"reachable": False, "error": str(exc)}
+    if method != "speedtest":
+        with _streak_lock:
+            if metrics.get("reachable"):
+                _fail_streak.pop(did, None); streak = 0
+            else:
+                streak = _fail_streak.get(did, 0) + 1; _fail_streak[did] = streak
+        if not metrics.get("reachable"):
+            reason = metrics.get("error") or "no reply"
+            if metrics.get("poll_error") and streak < _POLL_ERROR_HOLD:
+                log.error("%s (%s): the %s check itself failed (%s). Not treated as offline; holding the current status "
+                          "(%d of %d).", dname, host, method, reason, streak, _POLL_ERROR_HOLD)
+                return
+            if streak < confirm_polls:
+                log.warning("%s (%s): unreachable after %d attempt(s) [%s]. Poll %d of %d to confirm; holding the current status.",
+                            dname, host, attempt + 1, reason, streak, confirm_polls)
+                return
+            log.warning("%s (%s): OFFLINE confirmed after %d attempt(s) on %d poll(s) in a row [%s].",
+                        dname, host, attempt + 1, streak, reason)
 
     # V8.2: services/tasks watching is an optional EXTRA layered on top of
     # whatever primary check just ran above (ping/powershell/ssh/url/etc),
@@ -122,7 +169,13 @@ def _poll_device(device, app_cfg):
         log.error("Service/task watch error %s: %s", did, exc)
         metrics.setdefault("warnings", []).append(f"Service/task watch error: {exc}")
 
-    global_thr   = app_cfg.get("defaults", {}).get("thresholds", {})
+    # V11.3 patch 02: read the LIVE global thresholds (what Settings > Thresholds saves), fresh on every poll.
+    try:
+        from . import config_manager
+        global_thr = config_manager.effective_global_thresholds()
+    except Exception as exc:                      # never let a config hiccup stop a poll
+        log.error("Could not read global thresholds, falling back to the job's config copy: %s", exc)
+        global_thr = (app_cfg.get("defaults", {}) or {}).get("thresholds", {}) or {}
     device_notify = db.get_device_notify(did)
 
     overall, metric_states = alerts.evaluate_device(
@@ -156,7 +209,8 @@ def _poll_device(device, app_cfg):
 
 def start_scheduler(app_cfg):
     global _scheduler
-    _scheduler = BackgroundScheduler(daemon=True)
+    # 30 workers (APScheduler's default is 10): a few offline devices, each retrying, must not starve everyone else's polls
+    _scheduler = BackgroundScheduler(daemon=True, executors={"default": ThreadPoolExecutor(30)})
     _add_jobs(app_cfg)
     _scheduler.start()
     log.info("Scheduler started with %d device(s)", len(app_cfg.get("devices", [])))

@@ -108,6 +108,8 @@ Thresholds decide when a device or website moves from **Healthy** to **Warning**
 
 **Apply to all devices / Apply to all sites (V11.2).** Under each table in *Settings > Thresholds* there is an **Apply to all devices** button (device metrics) and an **Apply to all sites** button (website metrics). It takes the values currently in that table, saves them as the new default **and removes every per-device / per-site override of those metrics**, so every monitor in that category uses them. Per-metric *Wait* times are kept. The other category is not touched. A confirmation box appears first; the action is written to the Audit log. **Save all defaults** only saves the defaults and leaves overrides in place.
 
+**Devices | Sites switch and live effect (V11.3 patch 02/03).** At the top of *Settings > Thresholds* choose **Devices** or **Sites**. You then see only that category: its **global defaults table** (with **Save {devices|sites} defaults**, **Apply to all {devices|sites}** and **Fill recommended values**) and, underneath, every monitor of that category with its own overrides. The number in brackets is how many monitors are in the category. Values you save or apply are used by the monitoring engine on its very next check -- no restart. Precedence, lowest to highest: built-in recommended values, the website's own *Warn if slower than* / *SSL warn days* from the Sites page, **these global values**, then any per-monitor override from that monitor's **Notify** window. The **SSL Days** colour on the Sites page follows the same thresholds.
+
 **Overrides list (V11.2).** *Per-device / per-site threshold overrides* is grouped into two collapsible categories, **Devices** and **Sites**. Each monitor shows its active thresholds as small chips; bold = overridden for that monitor.
 
 **Apply wait & cooldown to all (V11.2).** The *Alert trigger mode* (wait seconds) and *Repeat-alert cooldown* settings have three buttons: **All devices & sites**, **Devices only**, **Sites only**. They are on *Settings > Escalation* and inside every **Notify** window. They copy the values shown on screen (no need to save first) to the chosen monitors and change **only** these timing fields -- emails, SMS/call numbers, escalation levels and thresholds stay as they are. In "Wait to confirm" mode the wait seconds become each monitor's Level 1 time and any per-metric wait override is removed so the new wait really applies. A confirmation box appears first; the action is written to the Audit log.
@@ -138,3 +140,19 @@ How the site timings are taken: *Response time* is the total time until the site
 Which device metrics each method offers: ping -- latency, packet loss; SNMP -- latency, packet loss, CPU, bandwidth; SSH -- latency, packet loss, CPU, memory, disk; PowerShell -- all six; disk usage -- disk, latency.
 
 **Alert wording.** Alerts now name the metric with its unit, for example *Response time (ms)*, value `1346`, threshold `1000 ms`; and for SSL *SSL certificate expires in (days)*, threshold `below 30 days`. SMS and voice-call alerts use the same names (SMS text is capped at 160 characters).
+
+## Offline detection: why a monitor says Offline, and how to stop false alarms (V11.3 patch 03)
+
+A device or site is shown as **Offline** only when it is really silent. Settings > **Escalation** > **Offline detection** has three numbers:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Re-checks before giving up | 2 | After a failed check, check again this many times before calling that poll a failure. |
+| Seconds between re-checks | 3 | Pause between those re-checks. |
+| Failed checks in a row to confirm Offline | 2 | How many polls in a row must fail (each one after all its re-checks) before the status becomes Offline. |
+
+While a failure is not yet confirmed, the dashboard keeps the last status and nothing is emailed. After Offline is confirmed, the **Alert trigger mode** wait on the same tab still applies before the first email. With the defaults and a 30-second check interval, Offline is confirmed after roughly 1 to 2 minutes of real silence. **Higher numbers = fewer false alarms but slower real alarms.** Setting re-checks to 0 and failed checks to 1 restores the old, immediate behaviour.
+
+A monitoring **error** (the check itself crashed, for example a missing component or an operating-system limit) is **not** treated as the device being offline. It is written to `logs/service.log` as `the ping check itself failed (...)` and only appears as a problem if it happens 5 polls in a row.
+
+**Finding out why something went Offline:** open `logs\service.log` and search for the monitor's name. You will see either `unreachable after N attempt(s) [reason]. Poll 1 of 2 to confirm` (a blip that was absorbed) or `OFFLINE confirmed after ... [reason]` with the reason (for example `no reply to 4 ping(s)` or `Timeout after 10s`). If a device is confirmed Offline often although you can reach it from your own PC, the cause is on the Net-monit server's network path (firewall rules for ICMP from that server, DNS on that server, a proxy, or a very short *ping timeout*), and the log reason tells you which.

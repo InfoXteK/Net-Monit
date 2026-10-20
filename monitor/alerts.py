@@ -56,14 +56,9 @@ def evaluate_metric_state(value, thresholds):
     return "ok"
 
 
-def evaluate_device(device, metrics, global_thresholds, device_notify=None):
-    """
-    Returns (overall_status, metric_states)
-    metric_states: {metric: (state, value, thresholds_used)}
-    """
-    if not metrics.get("reachable", False):
-        return "offline", {"availability": ("offline", 0, None)}
-
+def effective_thresholds(device, global_thresholds, device_notify=None):
+    """Layering, lowest to highest: built-in defaults < the site's own Sites-page values (ssl_warn_days /
+    max_response_ms) < global thresholds (Settings) < per-device config < per-device Notify-window overrides."""
     eff = {k: dict(v) for k, v in DEFAULT_THRESHOLDS.items()}
     # V11.1: a site's own "Warn if slower than (ms)" and SSL warn-days settings (Sites page > Edit) now feed
     # the response_ms / ssl_days_left WARNING threshold instead of producing a text note only. They sit BELOW
@@ -80,6 +75,18 @@ def evaluate_device(device, metrics, global_thresholds, device_notify=None):
                   (device_notify or {}).get("thresholds") or {}):
         for metric, override in (layer or {}).items():
             eff[metric] = {**eff.get(metric, {}), **(override or {})}
+    return eff
+
+
+def evaluate_device(device, metrics, global_thresholds, device_notify=None):
+    """
+    Returns (overall_status, metric_states)
+    metric_states: {metric: (state, value, thresholds_used)}
+    """
+    if not metrics.get("reachable", False):
+        return "offline", {"availability": ("offline", 0, None)}
+
+    eff = effective_thresholds(device, global_thresholds, device_notify)
 
     metric_states = {}
     worst = "ok"

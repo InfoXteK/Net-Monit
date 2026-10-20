@@ -71,6 +71,9 @@ def _load():
     cfg.setdefault("defaults", {})
     cfg["defaults"].setdefault("poll_interval_seconds", 30)
     cfg["defaults"].setdefault("ping_timeout_ms", 1000)
+    cfg["defaults"].setdefault("offline_retries", 2)               # V11.3 patch 03: re-check this many times before
+    cfg["defaults"].setdefault("offline_retry_delay_sec", 3)       #   calling a device unreachable, this many seconds apart,
+    cfg["defaults"].setdefault("offline_confirm_polls", 2)         #   and require this many polls in a row before OFFLINE
     cfg["defaults"].setdefault("thresholds", {})
     cfg.setdefault("devices", [])
     cfg.setdefault("smtp", {})
@@ -338,6 +341,20 @@ def update_global_thresholds(thresholds: dict):
     cfg = get_config()
     cfg["global_thresholds"] = thresholds
     save_config(cfg)   # FIX: was _save_config(cfg) which was undefined
+
+
+def effective_global_thresholds(cfg=None):
+    """The global thresholds the ALERT ENGINE must use: Settings > Thresholds saves to cfg["global_thresholds"]
+    (update_global_thresholds above); the legacy cfg["defaults"]["thresholds"] is kept as a base layer so old
+    config files still work. Read it fresh from the live config on every call -- never from a stale copy.
+    (Until V11.3 patch 02 the scheduler read ONLY the legacy key, so values saved in Settings never reached
+    the live alert engine.)"""
+    cfg = cfg if cfg is not None else get_config()
+    merged = {}
+    for src in ((cfg.get("defaults") or {}).get("thresholds"), cfg.get("global_thresholds")):
+        for metric, row in (src or {}).items():
+            merged[metric] = {**merged.get(metric, {}), **(row or {})}
+    return merged
 
 
 def update_escalation_defaults(defaults: dict):

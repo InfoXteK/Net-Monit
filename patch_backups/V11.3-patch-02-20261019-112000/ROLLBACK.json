@@ -1,0 +1,17 @@
+{
+ "name": "V11.3-patch-02",
+ "target": "D:\\My_Scripts\\Network_monitoring_project\\Net-monit-V11_3\\Net-monit-V11.3_patched-01",
+ "restore": [
+  "CLAUDE.md",
+  "app.py",
+  "docs/DOC-Admin-Guide.docx",
+  "docs/DOC-Admin-Guide.md",
+  "monitor/alerts.py",
+  "monitor/config_manager.py",
+  "monitor/scheduler.py",
+  "static/css/style.css",
+  "static/js/settings.js",
+  "templates/urlmonitor.html"
+ ],
+ "remove": []
+}
