@@ -343,6 +343,26 @@ def update_global_thresholds(thresholds: dict):
     save_config(cfg)   # FIX: was _save_config(cfg) which was undefined
 
 
+def effective_scoped_thresholds(cfg=None):
+    """{"type": {"firewall": {metric: {...}}}, "method": {"ssh": {...}}} -- thresholds that apply to every device of
+    that TYPE / METHOD (Settings > Thresholds). Read from the live config on every call."""
+    cfg = cfg if cfg is not None else get_config()
+    raw = cfg.get("scoped_thresholds") or {}
+    return {"type": dict(raw.get("type") or {}), "method": dict(raw.get("method") or {})}
+
+
+def update_scoped_thresholds(kind, key, thresholds):
+    """Replace ONE scope's thresholds; an empty dict removes the scope (its devices inherit again)."""
+    cfg = get_config()
+    sc = cfg.setdefault("scoped_thresholds", {})
+    group = sc.setdefault(kind, {})
+    if thresholds:
+        group[key] = thresholds
+    else:
+        group.pop(key, None)
+    save_config(cfg)
+
+
 def effective_global_thresholds(cfg=None):
     """The global thresholds the ALERT ENGINE must use: Settings > Thresholds saves to cfg["global_thresholds"]
     (update_global_thresholds above); the legacy cfg["defaults"]["thresholds"] is kept as a base layer so old

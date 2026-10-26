@@ -357,5 +357,17 @@
 
 {% endblock %}
 {% block scripts %}
+
+<!-- V11.3 patch 04: device window (double-click a tile) -->
+<div id="ds-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ds-title">
+  <div class="modal ds-box">
+    <div class="ds-head">
+      <div><h2 id="ds-title" style="margin:0 0 2px">Device</h2><div id="ds-sub" class="ds-sub"></div></div>
+      <button type="button" id="ds-x" class="btn secondary small" aria-label="Close" onclick="closeDeviceSettings()">&times;</button>
+    </div>
+    <div id="ds-body"><div style="color:var(--text-muted)">Loading&hellip;</div></div>
+  </div>
+</div>
+<script src="/static/js/threshold_ui.js"></script>
 <script src="/static/js/dashboard.js"></script>
 {% endblock %}

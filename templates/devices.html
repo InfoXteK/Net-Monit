@@ -39,6 +39,8 @@
         <label>Device type</label>
         <select id="f-type">
           <option value="network">Network device</option>
+          <option value="router">Router</option>
+          <option value="switch">Switch</option>
           <option value="firewall">Firewall</option>
           <option value="wireless">Wireless AP</option>
           <option value="windows">Windows server</option>
@@ -58,7 +60,7 @@
           <option value="snmp">SNMP</option>
           <option value="powershell">PowerShell (Windows)</option>
           <option value="ssh">SSH (Linux)</option>
-          <option value="disk_usage">Disk / Shared drive</option>
+          <option value="disk_usage">Disk / Shared folder (drive share)</option>
         </select>
       </div>
     </div>
@@ -87,7 +89,14 @@
     <h2 class="card-title" style="margin:0;">Monitored devices</h2>
     <span id="device-count" class="badge-secondary">loading…</span>
   </div>
-  <div id="device-list"></div>
+  <div class="dev-toolbar">
+        <div id="mf-dev" class="mon-filter-host"></div>
+        <label class="dev-group-pick" for="dev-group">Group by
+          <select id="dev-group" onchange="setDevGroup(this.value)" aria-label="Group devices by">
+            <option value="none">Nothing</option><option value="type">Type</option><option value="method">Method</option>
+          </select></label>
+      </div>
+      <div id="device-list"></div>
 </div>
 
 <!-- Notification modal (FIX #6 #7) -->
@@ -196,5 +205,6 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/threshold_ui.js"></script>
+<script src="/static/js/monitor_filters.js"></script>
 <script src="/static/js/devices.js"></script>
 {% endblock %}

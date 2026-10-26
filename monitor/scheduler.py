@@ -178,8 +178,14 @@ def _poll_device(device, app_cfg):
         global_thr = (app_cfg.get("defaults", {}) or {}).get("thresholds", {}) or {}
     device_notify = db.get_device_notify(did)
 
+    try:
+        from . import config_manager as _cm
+        scoped_thr = _cm.effective_scoped_thresholds()
+    except Exception as exc:
+        log.error("Could not read type/method thresholds: %s", exc)
+        scoped_thr = {}
     overall, metric_states = alerts.evaluate_device(
-        device, metrics, global_thr, device_notify=device_notify)
+        device, metrics, global_thr, device_notify=device_notify, scoped_thresholds=scoped_thr)
 
     error_msg = metrics.get("error") or metrics.get("last_error")
     db.upsert_device_status(did, dname, device.get("type","network"),

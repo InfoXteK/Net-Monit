@@ -56,9 +56,11 @@ def evaluate_metric_state(value, thresholds):
     return "ok"
 
 
-def effective_thresholds(device, global_thresholds, device_notify=None):
+def effective_thresholds(device, global_thresholds, device_notify=None, scoped_thresholds=None):
     """Layering, lowest to highest: built-in defaults < the site's own Sites-page values (ssl_warn_days /
-    max_response_ms) < global thresholds (Settings) < per-device config < per-device Notify-window overrides."""
+    max_response_ms) < global thresholds (Settings) < thresholds for the device's METHOD < thresholds for the device's
+    TYPE < per-device config < per-device Notify-window overrides. (Type beats method: "all firewalls" is more specific
+    than "everything checked by ping".)"""
     eff = {k: dict(v) for k, v in DEFAULT_THRESHOLDS.items()}
     # V11.1: a site's own "Warn if slower than (ms)" and SSL warn-days settings (Sites page > Edit) now feed
     # the response_ms / ssl_days_left WARNING threshold instead of producing a text note only. They sit BELOW
@@ -71,14 +73,17 @@ def effective_thresholds(device, global_thresholds, device_notify=None):
             eff["ssl_days_left"]["warning"] = float(ucfg["ssl_warn_days"])
     except (TypeError, ValueError):
         pass
-    for layer in (global_thresholds or {}, device.get("thresholds") or {},
+    sc = scoped_thresholds or {}
+    by_method = (sc.get("method") or {}).get(device.get("method") or "") or {}
+    by_type   = (sc.get("type")   or {}).get(device.get("type")   or "") or {}
+    for layer in (global_thresholds or {}, by_method, by_type, device.get("thresholds") or {},
                   (device_notify or {}).get("thresholds") or {}):
         for metric, override in (layer or {}).items():
             eff[metric] = {**eff.get(metric, {}), **(override or {})}
     return eff
 
 
-def evaluate_device(device, metrics, global_thresholds, device_notify=None):
+def evaluate_device(device, metrics, global_thresholds, device_notify=None, scoped_thresholds=None):
     """
     Returns (overall_status, metric_states)
     metric_states: {metric: (state, value, thresholds_used)}
@@ -86,7 +91,7 @@ def evaluate_device(device, metrics, global_thresholds, device_notify=None):
     if not metrics.get("reachable", False):
         return "offline", {"availability": ("offline", 0, None)}
 
-    eff = effective_thresholds(device, global_thresholds, device_notify)
+    eff = effective_thresholds(device, global_thresholds, device_notify, scoped_thresholds)
 
     metric_states = {}
     worst = "ok"

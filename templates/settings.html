@@ -92,7 +92,8 @@
     </div>
     <div class="card" style="margin-top:16px;">
       <h2 class="card-title">Per-device notification status</h2>
-      <div style="overflow-x:auto;"><table class="data-table">
+      <div style="overflow-x:auto;"><div id="mf-notif" class="mon-filter-host"></div>
+        <table class="data-table">
         <thead><tr><th>Device</th><th>Status</th><th>Recipients</th><th>Edit</th></tr></thead>
         <tbody id="notif-device-tbody"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">Loading…</td></tr></tbody>
       </table></div>
@@ -195,7 +196,8 @@
     </div>
     <div class="card" style="margin-top:16px;">
       <h2 class="card-title">Per-device escalation summary</h2>
-      <div style="overflow-x:auto;"><table class="data-table">
+      <div style="overflow-x:auto;"><div id="mf-esc" class="mon-filter-host"></div>
+        <table class="data-table">
         <thead><tr><th>Device</th><th>Levels</th><th>L1 delay</th><th>L2 delay</th><th>Edit</th></tr></thead>
         <tbody id="esc-device-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Loading…</td></tr></tbody>
       </table></div>
@@ -335,12 +337,19 @@
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
           Choose <strong>Devices</strong> or <strong>Sites</strong> above. You see that category's defaults and, underneath, every monitor of that category with its own overrides. Monitors without an override use these defaults.
         </p>
+        <div id="thr-scope-row" class="thr-scope-row" data-scope="devices">
+          <label for="thr-scope"><strong>Set thresholds for</strong></label>
+          <select id="thr-scope" onchange="onThrScope()" aria-label="Which devices these thresholds apply to"><option value="all">All devices</option></select>
+          <span class="thr-scope-hint">Pick a type (firewalls, switches, servers ...) or a method (ping, SSH, PowerShell, shared folders ...). The order of priority is: All devices, then the method, then the type, then the monitor's own values.</span>
+        </div>
         <div id="global-thresh-wrap"><div style="color:var(--text-muted);padding:12px">Loading metrics…</div></div>
+        <div id="scoped-thresh-wrap" class="thr-scoped" data-scope="devices"></div>
         <div id="s-thresh-status" style="font-size:13px;margin-top:10px;min-height:18px;"></div>
       </div>
       <div class="card" style="margin-top:16px;">
         <h2 class="card-title">Per-monitor threshold details</h2>
         <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">Bold values are overridden for that monitor; grey values come from the defaults above. Use <strong>Edit</strong> to change a monitor's own values.</p>
+        <div id="mf-thr" class="mon-filter-host"></div>
         <div id="thresh-device-groups"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading…</div></div>
       </div>
     </div>
@@ -385,7 +394,8 @@
     </div>
     <div class="card" style="margin-top:16px;">
       <h2 class="card-title">🖧 Network Devices</h2>
-      <div style="overflow-x:auto;"><table class="data-table">
+      <div style="overflow-x:auto;"><div id="mf-mon" class="mon-filter-host"></div>
+        <table class="data-table">
         <thead><tr><th>Name / ID</th><th>Type</th><th>Method</th><th>Status</th><th>Test</th><th>Notify</th><th>Remove</th></tr></thead>
         <tbody id="sett-devices-tbody"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px">Loading…</td></tr></tbody>
       </table></div>
@@ -954,6 +964,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/threshold_ui.js"></script>
+<script src="/static/js/monitor_filters.js"></script>
 <script src="/static/js/settings.js"></script>
 <script>
 function switchAuditSub(sub){

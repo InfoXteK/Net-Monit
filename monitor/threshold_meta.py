@@ -95,6 +95,48 @@ METHOD_METRICS = {
 }
 ALL_KEYS = list(METRICS.keys())
 
+# V11.3 patch 04: device TYPES (what the thing is) and METHODS (how it is checked), for filters and scoped thresholds.
+DEVICE_TYPES = [
+    ("network", "Network device"), ("router", "Router"), ("switch", "Switch"), ("firewall", "Firewall"),
+    ("wireless", "Wireless AP"), ("windows", "Windows server"), ("linux", "Linux server"), ("vmware", "VMware host"),
+    ("nas", "NAS / Storage"), ("printer", "Printer"), ("ups", "UPS"), ("camera", "IP Camera"), ("other", "Other"),
+]
+TYPE_LABELS = dict(DEVICE_TYPES)
+METHOD_LABELS = {"ping": "Ping (ICMP)", "snmp": "SNMP", "powershell": "PowerShell (Windows)", "ssh": "SSH (Linux)",
+                 "disk_usage": "Shared folders / disks", "url": "Websites"}
+SCOPE_KINDS = ("type", "method")
+
+
+# What a TYPE of device is normally checked with, used only when no device of that type exists yet.
+TYPE_DEFAULT_METHODS = {
+    "network": ["ping", "snmp"], "router": ["ping", "snmp"], "switch": ["ping", "snmp"], "firewall": ["ping", "snmp"],
+    "wireless": ["ping", "snmp"], "windows": ["powershell"], "linux": ["ssh"], "vmware": ["ping", "snmp"],
+    "nas": ["ping", "disk_usage"], "printer": ["ping"], "ups": ["ping", "snmp"], "camera": ["ping"], "other": ["ping"],
+}
+
+
+def type_metrics(type_id, methods_in_use=None):
+    """Metrics worth offering for a TYPE: exactly those its devices can report, i.e. the union of the metrics of the
+    methods those devices are checked with (a firewall checked only by ping -> latency + packet loss; a Linux server
+    checked by SSH -> latency, loss, CPU, memory, disk). With no device of that type yet, the usual methods for the type
+    are assumed. Websites (method url) never count. Catalogue order."""
+    methods = [m for m in (methods_in_use or []) if m != "url"] or TYPE_DEFAULT_METHODS.get(type_id, ["ping"])
+    got = []
+    for m in methods:
+        for k in METHOD_METRICS.get(m, []):
+            if k not in got:
+                got.append(k)
+    return [k for k in DEVICE_METRICS if k in got] or list(DEVICE_METRICS)
+
+
+def scope_metrics(kind, key):
+    """Metrics a scoped threshold table offers: a METHOD scope only the metrics that method produces; a TYPE scope
+    all device metrics (what is measured depends on how each device of that type is checked)."""
+    if kind == "method":
+        return list(METHOD_METRICS.get(key, DEVICE_METRICS))
+    return list(DEVICE_METRICS)
+
+
 
 def default_thresholds() -> dict:
     """{metric: {warning, critical[, lower_is_worse]}} -- what alerts.DEFAULT_THRESHOLDS is built from."""

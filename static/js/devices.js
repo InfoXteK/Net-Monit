@@ -231,29 +231,38 @@ function credHint(d){
 
 // ── Device list ────────────────────────────────────────────────────────────
 const TYPE_ICONS = {
-  network:"🌐", firewall:"🛡", wireless:"📡", windows:"🖥", linux:"🐧",
+  network:"🌐", router:"🧭", switch:"🔀", firewall:"🛡", wireless:"📡", windows:"🖥", linux:"🐧",
   vmware:"⚙", nas:"💾", printer:"🖨", ups:"⚡", camera:"📷", other:"📦",
 };
 
 async function loadDevices(){
   const r = await fetch("/api/devices",{headers:{"X-Session-Token":getSession()}});
   const allDevices = await r.json();
+  setTimeout(() => _openFromHash(allDevices), 0);
   window._devMethods = {}; allDevices.forEach(d => { window._devMethods[d.id] = d.method || "ping"; });
   // URL/site devices are managed exclusively on the Sites Monitor page --
   // keep the Devices page focused on hardware/network devices only.
   const devices = allDevices.filter(d => (d.method || "") !== "url");
   document.getElementById("device-count").textContent = `${devices.length} device(s) configured`;
-  const list = document.getElementById("device-list");
-  const isAdm = !!getSession();
-  if(!devices.length){ list.innerHTML=`<p class="card-sub">No devices yet. (Web/URL sites are managed on the Sites Monitor page.)</p>`; return; }
-  list.innerHTML = devices.map(d=>`
-    <div class="device-list-row">
+  _devList = devices;
+  const sel = document.getElementById("dev-group"); if(sel) sel.value = _devGroup();
+  renderDeviceList();
+}
+
+// V11.3 patch 05: Devices page -- filter by type / method and optional grouping, same bar as Settings
+let _devList = [];
+function _devGroup(){ try{ const g = sessionStorage.getItem("dev-group"); return (g==="type"||g==="method") ? g : "none"; }catch(_){ return "none"; } }
+function setDevGroup(g){ try{ sessionStorage.setItem("dev-group", g); }catch(_){} renderDeviceList(); }
+
+function _deviceRowHTML(d, isAdm){
+  return `
+    <div class="device-list-row" ${MonFilter.attrs(d)}>
       <div class="device-list-meta">
-        <span class="device-type-badge" title="${esc(d.type)}">${TYPE_ICONS[d.type]||"📦"} ${esc(d.method)}</span>
+        <span class="device-type-badge" title="${esc(d.type)}">${TYPE_ICONS[d.type]||"?"} ${esc(MonFilter.METHOD_LABELS[d.method]||d.method)}</span>
         <div>
           <div style="font-weight:600;">${esc(d.name)}</div>
-          <div class="device-host">${esc(d.host||"***")}${d.disk&&d.disk.path?" — "+esc(d.disk.path):""}</div>
-          <div style="font-size:11px;color:var(--text-muted);">${esc(d.type||"")}${d.poll_interval_seconds?" · poll every "+d.poll_interval_seconds+"s":""}</div>
+          <div class="device-host">${esc(d.host||"***")}${d.disk&&d.disk.path?" · "+esc(d.disk.path):""}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${esc(MonFilter.TYPE_LABELS[d.type]||d.type||"")}${d.poll_interval_seconds?" · poll every "+d.poll_interval_seconds+"s":""}</div>
           ${credHint(d)}
           <div id="test-result-${esc(d.id)}" style="margin-top:3px;"></div>
         </div>
@@ -264,7 +273,21 @@ async function loadDevices(){
         ${isAdm?`<button class="btn secondary small" onclick='openEditModal(${JSON.stringify(JSON.stringify(d))})'>&#9998; Edit</button>`:""}
         ${isAdm?`<button class="btn danger small" onclick="deleteDevice('${esc(d.id)}','${esc(d.name)}')">Remove</button>`:""}
       </div>
-    </div>`).join("");
+    </div>`;
+}
+
+function renderDeviceList(){
+  const list = document.getElementById("device-list"); if(!list) return;
+  const isAdm = !!getSession(), g = _devGroup();
+  if(!_devList.length){ list.innerHTML = `<p class="card-sub">No devices yet. (Web/URL sites are managed on the Sites Monitor page.)</p>`; return; }
+  if(g === "none"){ list.innerHTML = _devList.map(d => _deviceRowHTML(d, isAdm)).join(""); }
+  else {
+    const labels = g === "type" ? MonFilter.TYPE_LABELS : MonFilter.METHOD_LABELS, groups = {};
+    _devList.forEach(d => { const k = d[g] || "other"; (groups[k] = groups[k] || []).push(d); });
+    list.innerHTML = Object.keys(groups).sort((a,b) => String(labels[a]||a).localeCompare(String(labels[b]||b))).map(k =>
+      `<section class="dev-group" data-mon-box><h3 class="dev-group-h">${esc(labels[k]||k)} <span>(${groups[k].length})</span></h3>${groups[k].map(d => _deviceRowHTML(d, isAdm)).join("")}</section>`).join("");
+  }
+  MonFilter.mount("mf-dev", "device-list");
 }
 
 // ── Edit modal ─────────────────────────────────────────────────────────────
@@ -601,4 +624,17 @@ async function applyTimingBtn(scope, prefix){
     showToast(res.message, res.ok?"success":"error");
     
   }catch(e){ showToast("Apply failed: "+e.message,"error"); }
+}
+
+// V11.3 patch 04: deep links from the dashboard device window -- /devices#edit=<id> and /devices#notify=<id>
+let _hashHandled = false;
+function _openFromHash(devices){
+  if(_hashHandled) return;
+  const m = (location.hash || "").match(/^#(edit|notify)=(.+)$/);
+  if(!m) return;
+  _hashHandled = true;
+  const id = decodeURIComponent(m[2]), dev = (devices || []).find(x => x.id === id);
+  history.replaceState(null, "", location.pathname + location.search);
+  if(!dev){ showToast("That device no longer exists", "error"); return; }
+  if(m[1] === "edit") openEditModal(JSON.stringify(dev)); else openNotifyModal(dev.id, dev.name);
 }

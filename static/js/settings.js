@@ -157,13 +157,14 @@ async function loadNotifDeviceTable(){
       const n=notifMap[d.id]||{};
       const en=n.notifications_enabled!==0;
       const emails=(n.notify_emails||[]).length?n.notify_emails.slice(0,2).join(", ")+(n.notify_emails.length>2?` +${n.notify_emails.length-2}…`:""):"<span style='color:var(--text-muted)'>admin (default)</span>";
-      return `<tr>
-        <td><strong>${esc(d.name)}</strong></td>
+      return `<tr ${MonFilter.attrs(d)}>
+        <td><strong>${esc(d.name)}</strong>${MonFilter.sub(d)}</td>
         <td><span style="color:${en?"var(--status-ok)":"var(--text-muted)"}">${en?"● Enabled":"○ Disabled"}</span></td>
         <td style="font-size:12px">${emails}</td>
         <td><button class="btn secondary small" onclick="openSettNotify('${esc(d.id)}','${esc(d.name)}')">Edit</button></td>
       </tr>`;
     }).join("")||`<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:16px">No devices</td></tr>`;
+    MonFilter.mount("mf-notif","tab-notifications");
   }catch(e){}
 }
 
@@ -357,14 +358,15 @@ async function loadEscDeviceTable(){
     tbody.innerHTML=devices.map(d=>{
       const n=notifMap[d.id]||{};
       const lv=n.escalation_levels||0;
-      return `<tr>
-        <td><strong>${esc(d.name)}</strong></td>
+      return `<tr ${MonFilter.attrs(d)}>
+        <td><strong>${esc(d.name)}</strong>${MonFilter.sub(d)}</td>
         <td>${lv>0?`<span style="color:#F2B84B">${lv} level${lv>1?"s":""}</span>`:"<span style='color:var(--text-muted)'>Off</span>"}</td>
         <td style="font-size:12px">${lv>=1?`${n.escalation_after_sec_l1||60}s`:"—"}</td>
         <td style="font-size:12px">${lv>=2?`${n.escalation_after_sec_l2||600}s`:"—"}</td>
         <td><button class="btn secondary small" onclick="openSettNotify('${esc(d.id)}','${esc(d.name)}')">Edit</button></td>
       </tr>`;
     }).join("")||`<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:16px">No devices</td></tr>`;
+    MonFilter.mount("mf-esc","tab-escalation");
   }catch(e){}
 }
 
@@ -863,6 +865,7 @@ async function resetTmpl(){
 let _globalThresh={};
 async function loadThreshTab(){
   setThrView(thrView());
+  setTimeout(()=>loadScopedThresholds(),0);
   try{
     const r=await fetch("/api/settings/thresholds",{headers:{"X-Session-Token":getSession()}});
     _globalThresh=r.ok?await r.json():{};
@@ -954,8 +957,8 @@ async function loadThreshDeviceTable(){
     const TYPE={url:"Website",ping:"Ping",snmp:"SNMP",ssh:"SSH",powershell:"PowerShell",disk_usage:"Disk"};
     const row=d=>{
       const t=(notifMap[d.id]||{}).thresholds||{};
-      return `<tr>
-        <td style="min-width:150px"><strong>${esc(d.name)}</strong></td>
+      return `<tr ${MonFilter.attrs(d)}>
+        <td style="min-width:150px"><strong>${esc(d.name)}</strong>${MonFilter.sub(d)}</td>
         <td><span class="thr-method">${esc(TYPE[d.method||"ping"]||d.method||"")}</span></td>
         <td>${ThrUI.summaryHTML(meta,d.method||"ping",t,_globalThresh)}</td>
         <td><button class="btn secondary small" onclick="openSettNotify('${esc(d.id)}','${esc(d.name)}')">Edit</button></td>
@@ -973,6 +976,8 @@ async function loadThreshDeviceTable(){
     const nd=v("thr-n-devices"), ns=v("thr-n-sites"); if(nd) nd.textContent="("+devs.length+")"; if(ns) ns.textContent="("+sites.length+")";
     host.innerHTML=devices.length?(cat("\uD83D\uDDA5 Devices",devs,true,"devices")+cat("\uD83C\uDF10 Sites",sites,true,"sites")):
       `<div style="color:var(--text-muted);text-align:center;padding:16px">No devices or sites yet</div>`;
+    await MonFilter.mount("mf-thr","thresh-device-groups");
+    syncThrFilter();
   }catch(e){}
 }
 
@@ -1128,10 +1133,10 @@ async function loadDevicesTab(){
     const rowHtml = (d) => {
       const s=statMap[d.id]||{};const sc=s.status||"unknown";
       const cols={ok:"var(--status-ok)",warning:"var(--status-warning)",critical:"var(--status-critical)",offline:"var(--text-muted)",unknown:"var(--text-muted)"};
-      return `<tr>
+      return `<tr ${MonFilter.attrs(d)}>
         <td><strong>${esc(d.name)}</strong><br><span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${esc(d.id)}</span></td>
-        <td style="font-size:12px">${esc(d.type||"")}</td>
-        <td style="font-size:12px">${esc(d.method||"")}</td>
+        <td style="font-size:12px">${esc(MonFilter.TYPE_LABELS[d.type]||d.type||"")}</td>
+        <td style="font-size:12px">${esc(MonFilter.METHOD_LABELS[d.method]||d.method||"")}</td>
         <td><span style="color:${cols[sc]};font-weight:600">● ${STATUS_TEXT[sc]||sc}</span></td>
         <td>
           <button class="btn secondary small" onclick="settTestDevice('${esc(d.id)}','${esc(d.name)}')">▶ Test</button>
@@ -1153,6 +1158,7 @@ async function loadDevicesTab(){
       tbodySites.innerHTML = siteDevices.map(rowHtml).join("") ||
         `<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:16px">No sites yet — add one from the Sites Monitor page</td></tr>`;
     }
+    MonFilter.mount("mf-mon","tab-devices");
   }catch(e){console.error("loadDevicesTab",e);}
 }
 async function settTestDevice(id,name){
@@ -1722,4 +1728,116 @@ async function saveOfflineDetection(){
     if(!r.ok||!j.ok){ setStatus("od-status",(j&&j.error)||("Save failed ("+r.status+")"),false); return; }
     setStatus("od-status","Saved \u2713 \u2014 applies from the next check",true);
   }catch(e){ setStatus("od-status","Save failed: "+e.message,false); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   V11.3 patch 04 -- thresholds for a TYPE (firewalls, switches, servers ...) or a METHOD (ping, SSH, shared folders ...)
+   Priority, low to high: All devices < method < type < the monitor's own values.
+   ═══════════════════════════════════════════════════════════ */
+const SC_IDS={en:"sc-en-",w:"sc-w-",c:"sc-c-"};
+function _scState(){ return (globalThis._thrScoped=globalThis._thrScoped||{type:{},method:{}}); }
+function thrScope(){
+  const val=(v("thr-scope")||{}).value||"all"; if(val==="all"||!val) return {kind:"all",key:""};
+  const i=val.indexOf(":"); return {kind:val.slice(0,i),key:val.slice(i+1)};
+}
+// Metrics offered for a scope: a METHOD -> what that method produces; a TYPE -> what its devices can report (from the
+// server: the methods those devices use). Never "everything".
+function scopeKeys(sc,meta){
+  if(sc.kind==="method") return meta.methods[sc.key]||meta.device_metrics;
+  const f=(globalThis._thrFacets||{}), row=(f.types||[]).find(t=>t.id===sc.key)||(f.all_types||[]).find(t=>t.id===sc.key);
+  return (row&&row.metrics&&row.metrics.length)?row.metrics:meta.device_metrics;
+}
+function scopeBasis(sc){
+  if(sc.kind==="method") return "Shows only what "+scopeLabel(sc)+" can measure.";
+  const f=(globalThis._thrFacets||{}), row=(f.types||[]).find(t=>t.id===sc.key);
+  const ms=(row&&row.methods||[]).map(m=>MonFilter.METHOD_LABELS[m]||m);
+  return ms.length?("Shows what "+scopeLabel(sc)+" devices report: they are checked by "+ms.join(", ")+".")
+                  :("No "+scopeLabel(sc)+" device exists yet, so this shows the usual metrics for the type.");
+}
+function scopeLabel(sc){
+  if(sc.kind==="type") return MonFilter.TYPE_LABELS[sc.key]||sc.key;
+  if(sc.kind==="method") return MonFilter.METHOD_LABELS[sc.key]||sc.key;
+  return "All devices";
+}
+async function loadScopedThresholds(){
+  try{
+    const r=await fetch("/api/settings/thresholds/scoped",{headers:{"X-Session-Token":getSession()}});
+    if(r.ok){ const d=await r.json(); globalThis._thrScoped={type:d.type||{},method:d.method||{}}; }
+  }catch(_){}
+  await renderScopeSelect();
+}
+async function renderScopeSelect(){
+  const sel=v("thr-scope"); if(!sel) return;
+  const facets=await MonFilter.loadFacets(true), keep=sel.value||"all", sc=_scState();
+  globalThis._thrFacets=facets;
+  const mark=(kind,key)=>Object.keys(sc[kind][key]||{}).length?" \u2713 custom":"";
+  let h='<option value="all">All devices</option>';
+  const types=(facets.types||[]).slice();
+  Object.keys(sc.type).forEach(k=>{ if(!types.some(t=>t.id===k)) types.push({id:k,label:MonFilter.TYPE_LABELS[k]||k,count:0}); });
+  h+='<optgroup label="By type">'+types.map(t=>`<option value="type:${esc(t.id)}">${esc(t.label)} (${t.count})${mark("type",t.id)}</option>`).join("")+"</optgroup>";
+  const methods=(facets.methods||[]).filter(m=>m.id!=="url");
+  h+='<optgroup label="By method">'+methods.map(m=>`<option value="method:${esc(m.id)}">${esc(m.label)} (${m.count})${mark("method",m.id)}</option>`).join("")+"</optgroup>";
+  sel.innerHTML=h; sel.value=[...sel.options].some(o=>o.value===keep)?keep:"all";
+  onThrScope();
+}
+function syncThrFilter(){
+  const sc=thrScope();
+  MonFilter.set("mf-thr",{type:sc.kind==="type"?sc.key:"",method:sc.kind==="method"?sc.key:""});
+}
+function onThrScope(){
+  const sc=thrScope(), root=v("thr-root");
+  if(root) root.setAttribute("data-dscope",sc.kind==="all"?"all":"scoped");
+  renderScopedTable(); syncThrFilter();
+}
+function renderScopedTable(){
+  const wrap=v("scoped-thresh-wrap"); if(!wrap) return;
+  const sc=thrScope(), meta=ThrUI.get();
+  if(sc.kind==="all"||!meta){ wrap.innerHTML=""; return; }
+  const keys=scopeKeys(sc,meta);
+  const saved=(_scState()[sc.kind]||{})[sc.key]||{};
+  const inherit={}; keys.forEach(k=>{ const g=_globalThresh[k]||{}, m=meta.metrics[k]; inherit[k]={warning:g.warning!=null?g.warning:m.warning,critical:g.critical!=null?g.critical:m.critical}; });
+  const label=scopeLabel(sc), noun=sc.kind==="type"?"every "+label+" device":"every device checked by "+label;
+  wrap.innerHTML=`<div class="thr-sec" data-scope="devices-scoped">
+    <h3 style="font-size:15px;margin:2px 0 2px">${esc(label)} thresholds</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 4px">Applies to ${esc(noun)}. ${esc(scopeBasis(sc))}</p>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px"><strong>Leave a box empty to inherit</strong> the grey value (from All devices). Hover or click the <span class="thr-i" style="pointer-events:none">!</span> for details.</p>
+    <div style="overflow-x:auto">${ThrUI.tableHTML(meta,keys,saved,SC_IDS,{wait:false,inherit})}</div>
+    <div class="thr-actions">
+      <button type="button" class="btn primary" id="btn-save-scope" onclick="saveScoped(false)">Save ${esc(label)} thresholds</button>
+      <button type="button" class="btn secondary" id="btn-apply-scope" onclick="saveScoped(true)">Apply to all ${esc(label)}</button>
+      <button type="button" class="btn secondary" id="btn-clear-scope" onclick="clearScoped()">Clear (inherit All devices)</button>
+      <button type="button" class="btn secondary" id="btn-fill-scope" onclick="fillScoped()">Fill recommended values</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0"><strong>Save</strong> keeps these for the group. <strong>Apply to all</strong> also removes any monitor's own value of these metrics inside the group. <strong>Clear</strong> removes this group's thresholds.</p>
+  </div>`;
+}
+async function saveScoped(apply){
+  const meta=ThrUI.get(), sc=thrScope();
+  if(!meta||sc.kind==="all"){ setStatus("s-thresh-status","Choose a type or a method first",false); return; }
+  const keys=scopeKeys(sc,meta);
+  const {thresholds,errors}=ThrUI.collect(meta,keys,SC_IDS,{wait:false});
+  if(errors.length){ setStatus("s-thresh-status",errors[0],false); return; }
+  const body={kind:sc.kind,key:sc.key,thresholds:ThrUI.compact(thresholds),apply:!!apply};
+  if(apply&&!Object.keys(body.thresholds).length){ setStatus("s-thresh-status","Nothing to apply: fill at least one value first",false); return; }
+  if(apply&&!confirm("Apply these thresholds to ALL "+scopeLabel(sc)+" monitors?\n\nAny monitor's own value of these metrics is removed, so they all follow this group. Wait times are kept.")) return;
+  const r=await fetch("/api/settings/thresholds/scoped",{method:"POST",headers:authHeaders(),body:JSON.stringify(body)});
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j.ok){ setStatus("s-thresh-status",(j&&j.error)||("Save failed ("+r.status+")"),false); return; }
+  setStatus("s-thresh-status",(apply?"Applied to "+j.count+" monitor"+(j.count===1?"":"s")+" \u2713 ("+j.overrides_removed+" own value"+(j.overrides_removed===1?"":"s")+" removed)":"Saved \u2713 ("+j.count+" monitor"+(j.count===1?"":"s")+" in this group)"),true);
+  await loadScopedThresholds(); loadThreshDeviceTable();
+}
+async function clearScoped(){
+  const sc=thrScope(); if(sc.kind==="all") return;
+  if(!confirm("Remove the "+scopeLabel(sc)+" thresholds? Those monitors go back to the All devices values.")) return;
+  const r=await fetch("/api/settings/thresholds/scoped",{method:"POST",headers:authHeaders(),body:JSON.stringify({kind:sc.kind,key:sc.key,thresholds:{}})});
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j.ok){ setStatus("s-thresh-status",(j&&j.error)||("Clear failed ("+r.status+")"),false); return; }
+  setStatus("s-thresh-status","Cleared \u2713 \u2014 "+scopeLabel(sc)+" now inherits All devices",true);
+  await loadScopedThresholds(); loadThreshDeviceTable();
+}
+function fillScoped(){
+  const meta=ThrUI.get(), sc=thrScope(); if(!meta||sc.kind==="all") return;
+  const keys=scopeKeys(sc,meta);
+  ThrUI.fillRecommended(meta,keys,SC_IDS);
+  setStatus("s-thresh-status","Filled with the recommended values \u2014 click Save to keep them",true);
 }
