@@ -76,6 +76,7 @@ const ThrUI = (function () {
     const rows = metrics.map(k => {
       const m = meta.metrics[k]; if (!m) return "";
       const s = saved[k] || {};
+      const inh = (opts.inherit && opts.inherit[k]) || m;       // placeholder = the value this row falls back to
       const num = (id, val, ph) =>
         '<input type="number" id="' + esc(id) + '" step="any" min="' + m.min + '" max="' + m.max + '" style="width:76px" ' +
         'value="' + (val != null ? esc(val) : "") + '" placeholder="' + esc(ph) + '">';
@@ -84,14 +85,16 @@ const ThrUI = (function () {
           ' <span style="color:var(--text-muted);font-weight:400">(' + esc(m.unit) + ')</span></span> ' + infoButton(k, m) +
           (m.lower_is_worse ? ' <span class="thr-dir" title="Alerts when the value falls below the threshold">\u25BC alerts when below</span>' : '') + '</td>' +
         '<td style="text-align:center"><input type="checkbox" id="' + esc(ids.en + k) + '"' + (s.enabled !== false ? " checked" : "") + '></td>' +
-        '<td>' + num(ids.w + k, s.warning, m.warning) + '</td>' +
-        '<td>' + num(ids.c + k, s.critical, m.critical) + '</td>' +
+        '<td>' + num(ids.w + k, s.warning, inh.warning) + '</td>' +
+        '<td>' + num(ids.c + k, s.critical, inh.critical) + '</td>' +
         (showWait ? '<td><input type="number" id="' + esc(ids.wait + k) + '" min="0" style="width:72px" value="' +
           (s.wait_sec != null ? esc(s.wait_sec) : "") + '" placeholder="' + esc(opts.waitPlaceholder != null ? opts.waitPlaceholder : "") + '"></td>' : "") +
+        (opts.sources ? '<td class="thr-src">' + esc(opts.sources[k] || "built-in") + '</td>' : "") +
         '</tr>';
     }).join("");
     return '<table class="data-table thr-table" style="margin:0"><thead><tr><th>Metric</th><th>Enabled</th><th>Warning</th><th>Critical</th>' +
       (showWait ? '<th title="Seconds this metric must stay bad before the first alert fires in &quot;Wait to confirm&quot; mode. Blank = use this device\'s Level 1 time.">Wait (sec)</th>' : "") +
+      (opts.sources ? '<th>Comes from</th>' : "") +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
@@ -131,6 +134,16 @@ const ThrUI = (function () {
       out[k] = row;
     });
     return { thresholds: out, errors };
+  }
+
+  /* Drop rows that change nothing (enabled, no values, no wait) so a blank row means "inherit", not "set here". */
+  function compact(thresholds) {
+    const out = {};
+    Object.keys(thresholds || {}).forEach(k => {
+      const r = thresholds[k] || {};
+      if (r.warning != null || r.critical != null || r.wait_sec != null || r.enabled === false) out[k] = r;
+    });
+    return out;
   }
 
   function fillRecommended(meta, metrics, ids, getEl) {
@@ -270,7 +283,7 @@ const ThrUI = (function () {
   bindInfo();
 
   return { load, get, setMeta, esc, metricsFor, defaultsFor, dirText, rangeText, recText,
-           tableHTML, collect, fillRecommended, summaryHTML, infoHTML, showInfo, closeInfo, infoState, bindInfo,
+           tableHTML, collect, compact, fillRecommended, summaryHTML, infoHTML, showInfo, closeInfo, infoState, bindInfo,
            timingPayload, timingConfirmText, applyTiming };
 })();
 if (typeof module !== "undefined") module.exports = ThrUI;

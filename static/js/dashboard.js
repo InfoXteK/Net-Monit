@@ -751,6 +751,14 @@ function statusLabel(status) {
 function attachTileEvents(card, device) {
   const id = device.device_id;
 
+  // V11.3 patch 04: double-click a tile = open that device's settings and thresholds
+  card.addEventListener('dblclick', e => {
+    if (typeof editMode !== 'undefined' && editMode) return;
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea')) return;
+    try { window.getSelection().removeAllRanges(); } catch (_) {}
+    openDeviceSettings(id);
+  });
+
   // Drag-to-reorder (HTML5 drag API)
   card.addEventListener('dragstart', e => {
     dragSrcId = id;
@@ -1165,3 +1173,95 @@ async function submitQuickAdd() {
     if (btn) btn.disabled = false;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   V11.3 patch 04 -- device window: double-click a tile
+   Shows what the device is, how it is checked, its live status and the thresholds that apply to it (with the layer each
+   value comes from) and lets an administrator set this device's own values. The full edit / notification screens are
+   one click away.
+   ═══════════════════════════════════════════════════════════ */
+const DS_IDS = { en: 'ds-en-', w: 'ds-w-', c: 'ds-c-', wait: 'ds-wait-' };
+let _dsDevice = null, _dsKeys = [];
+
+function dsEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function closeDeviceSettings() {
+  const m = document.getElementById('ds-modal'); if (m) m.classList.add('hidden');
+  _dsDevice = null;
+}
+
+async function openDeviceSettings(deviceId) {
+  const modal = document.getElementById('ds-modal'), body = document.getElementById('ds-body');
+  if (!modal || !body) return;
+  _dsDevice = deviceId;
+  document.getElementById('ds-title').textContent = 'Device settings';
+  document.getElementById('ds-sub').textContent = '';
+  body.innerHTML = '<div style="color:var(--text-muted)">Loading\u2026</div>';
+  modal.classList.remove('hidden');
+  try {
+    const [meta, r] = await Promise.all([ThrUI.load(), fetch('/api/devices/' + encodeURIComponent(deviceId) + '/thresholds', { headers: { 'X-Session-Token': getSession() } })]);
+    if (r.status === 401 || r.status === 403) { body.innerHTML = '<p>Sign in as an <strong>administrator</strong> to view and change device settings.</p>'; return; }
+    if (!r.ok) { body.innerHTML = '<p style="color:var(--status-critical)">Could not load this device (' + r.status + ').</p>'; return; }
+    renderDeviceSettings(meta, await r.json());
+  } catch (e) {
+    body.innerHTML = '<p style="color:var(--status-critical)">Could not load this device: ' + dsEsc(e.message) + '</p>';
+  }
+}
+
+function renderDeviceSettings(meta, data) {
+  const d = data.device, n = data.notify || {}, body = document.getElementById('ds-body');
+  document.getElementById('ds-title').textContent = d.name;
+  document.getElementById('ds-sub').innerHTML = dsEsc(d.type_label || 'Device') + ' &middot; ' + dsEsc(d.method_label || d.method) + ' &middot; ' + dsEsc(d.host || '');
+  _dsKeys = data.metrics.map(m => m.key);
+  const saved = {}, inherit = {}, sources = {};
+  data.metrics.forEach(m => { if (Object.keys(m.override || {}).length) saved[m.key] = m.override; inherit[m.key] = m.effective; sources[m.key] = m.source; });
+  const since = d.last_checked ? new Date(d.last_checked * 1000).toLocaleString() : 'not checked yet';
+  const trig = n.alert_trigger_mode === 'immediate' ? 'alert immediately' : 'wait ' + (n.escalation_after_sec_l1 || 60) + ' s to confirm';
+  const rep = n.alert_notify_mode === 'cooldown' ? 'repeats at least ' + (n.notify_cooldown_sec || 300) + ' s apart' : 'repeats immediately';
+  const id = encodeURIComponent(d.id);
+  const table = ThrUI.tableHTML(meta, _dsKeys, saved, DS_IDS, { wait: true, waitPlaceholder: n.escalation_after_sec_l1 || 60, inherit, sources });
+  body.innerHTML =
+    '<div class="ds-grid">' +
+      '<div><span class="ds-k">Status</span><span class="status-label ' + dsEsc(d.status) + '">' + dsEsc(typeof statusLabel === 'function' ? statusLabel(d.status) : d.status) + '</span></div>' +
+      '<div><span class="ds-k">Last check</span>' + dsEsc(since) + '</div>' +
+      '<div><span class="ds-k">Checks every</span>' + dsEsc(d.poll_interval_seconds || 30) + ' s</div>' +
+      '<div><span class="ds-k">Alerts</span>' + dsEsc(n.notifications_enabled === 0 ? 'off' : trig + '; ' + rep) + '</div>' +
+    '</div>' +
+    (d.last_error ? '<div class="ds-err">' + dsEsc(d.last_error) + '</div>' : '') +
+    '<h3 style="margin:14px 0 4px;font-size:14px">Thresholds for this device</h3>' +
+    '<p class="ds-note">Grey numbers are what applies now and <strong>Comes from</strong> says where they are set. Type a value to give <strong>this device</strong> its own; leave a box empty to inherit. Hover or click the <span class="thr-i" style="pointer-events:none">!</span> for details.</p>' +
+    '<div style="overflow-x:auto">' + table + '</div>' +
+    '<div class="ds-actions">' +
+      '<button type="button" class="btn primary" onclick="saveDeviceSettings()">Save thresholds</button>' +
+      '<button type="button" class="btn secondary" onclick="resetDeviceSettings()">Use inherited values</button>' +
+      '<span id="ds-status" class="ds-status"></span>' +
+    '</div>' +
+    '<div class="ds-links">' +
+      '<a class="btn secondary small" href="/devices#edit=' + id + '">Edit device settings</a> ' +
+      '<a class="btn secondary small" href="/devices#notify=' + id + '">Notifications &amp; escalation</a>' +
+    '</div>';
+}
+
+function dsStatus(msg, ok) { const e = document.getElementById('ds-status'); if (e) { e.textContent = msg; e.style.color = ok ? 'var(--status-ok)' : 'var(--status-critical)'; } }
+
+async function saveDeviceSettings() {
+  const meta = ThrUI.get(); if (!meta || !_dsDevice) return;
+  const { thresholds, errors } = ThrUI.collect(meta, _dsKeys, DS_IDS, { wait: true });
+  if (errors.length) { dsStatus(errors[0], false); return; }
+  const r = await fetch('/api/devices/' + encodeURIComponent(_dsDevice) + '/thresholds', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ thresholds: ThrUI.compact(thresholds) }) });
+  let j = {}; try { j = await r.json(); } catch (_) {}
+  if (!r.ok || !j.ok) { dsStatus((j && j.error) || ('Save failed (' + r.status + ')'), false); return; }
+  dsStatus('Saved \u2713 (' + j.overrides + ' own value' + (j.overrides === 1 ? '' : 's') + ') \u2014 applies from the next check', true);
+  openDeviceSettings(_dsDevice).then(() => dsStatus('Saved \u2713 \u2014 applies from the next check', true));
+}
+
+function resetDeviceSettings() {
+  _dsKeys.forEach(k => {
+    ['w', 'c', 'wait'].forEach(p => { const el = document.getElementById(DS_IDS[p] + k); if (el) el.value = ''; });
+    const en = document.getElementById(DS_IDS.en + k); if (en) en.checked = true;
+  });
+  dsStatus('All boxes cleared \u2014 click Save thresholds to use the inherited values', true);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = document.getElementById('ds-modal'); if (m && !m.classList.contains('hidden')) closeDeviceSettings(); } });
+document.addEventListener('click', e => { const m = document.getElementById('ds-modal'); if (m && e.target === m) closeDeviceSettings(); });

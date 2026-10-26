@@ -1170,6 +1170,167 @@ def api_apply_esc_all():
     return jsonify({"ok":True,"count":len(cfg.get("devices",[]))})
 
 
+# ── V11.3 patch 04: type / method scopes, facets, and single-device thresholds ────────────────────
+def _drop_noop_rows(clean):
+    """A row that only says enabled=true changes nothing; keeping it would make a metric look 'set here' (hiding where
+    its value really comes from). Rows with a value, a disabled flag or a wait time stay."""
+    return {k: v for k, v in clean.items() if (set(v) - {"enabled"}) or v.get("enabled") is False}
+
+def _device_by_id(did):
+    return next((d for d in config_manager.get_config().get("devices", []) if d.get("id") == did), None)
+
+def _in_scope(device, kind, key):
+    return (device.get(kind) or "") == key
+
+@app.route("/api/monitor-facets", methods=["GET"])
+def api_monitor_facets():
+    """Counts for the Type / Method filters: only types and methods that exist, plus their labels."""
+    err = _require_admin()
+    if err: return err
+    devs = config_manager.get_config().get("devices", [])
+    def tally(field):
+        out = {}
+        for d in devs:
+            k = d.get(field) or ""
+            if k: out[k] = out.get(k, 0) + 1
+        return out
+    types, methods = tally("type"), tally("method")
+    order = [k for k, _ in threshold_meta.DEVICE_TYPES]
+    def methods_of(t):
+        return sorted({d.get("method") for d in devs if (d.get("type") or "") == t and d.get("method") and d.get("method") != "url"})
+    type_rows = [{"id": k, "label": threshold_meta.TYPE_LABELS.get(k, k.replace("_", " ").title()), "count": n,
+                  "methods": methods_of(k), "metrics": threshold_meta.type_metrics(k, methods_of(k))}
+                 for k, n in sorted(types.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0]))]
+    method_rows = [{"id": k, "label": threshold_meta.METHOD_LABELS.get(k, k), "count": n,
+                    "metrics": threshold_meta.scope_metrics("method", k)} for k, n in sorted(methods.items())]
+    return jsonify({"types": type_rows, "methods": method_rows,
+                    "all_types": [{"id": k, "label": v, "metrics": threshold_meta.type_metrics(k, [])} for k, v in threshold_meta.DEVICE_TYPES]})
+
+@app.route("/api/settings/thresholds/scoped", methods=["GET"])
+def api_get_scoped_thresholds():
+    err = _require_admin()
+    if err: return err
+    return jsonify(config_manager.effective_scoped_thresholds())
+
+@app.route("/api/settings/thresholds/scoped", methods=["POST"])
+def api_set_scoped_thresholds():
+    """Body {kind: 'type'|'method', key: 'firewall'|'ssh'|..., thresholds: {metric: {enabled, warning, critical}},
+    apply: bool}. Saves the thresholds for every device of that type/method. An empty `thresholds` removes the scope
+    (its devices inherit the global values again). With apply=true the per-device warning/critical/enabled overrides of
+    the SENT metrics are removed from every device in that scope, so they all follow the scope (wait_sec is kept)."""
+    err = _require_admin()
+    if err: return err
+    b = request.get_json(force=True) or {}
+    kind, key = b.get("kind"), str(b.get("key") or "").strip()
+    if kind not in threshold_meta.SCOPE_KINDS or not key:
+        return jsonify({"ok": False, "error": "kind must be 'type' or 'method' and key must be given."}), 400
+    devs_in = [d for d in config_manager.get_config().get("devices", []) if _in_scope(d, kind, key)]
+    known = threshold_meta.TYPE_LABELS if kind == "type" else threshold_meta.METHOD_LABELS
+    if key not in known and not devs_in:
+        return jsonify({"ok": False, "error": f"Unknown {kind} '{key}'."}), 400
+    if kind == "method" and key == "url":
+        return jsonify({"ok": False, "error": "Website thresholds are set on the Sites side of this tab."}), 400
+    allowed = threshold_meta.scope_metrics(kind, key)
+    incoming = b.get("thresholds") or {}
+    if not isinstance(incoming, dict):
+        return jsonify({"ok": False, "error": "Thresholds must be an object of metric settings."}), 400
+    incoming = {k: v for k, v in incoming.items() if k in allowed}
+    clean, errs = threshold_meta.validate_thresholds(incoming)
+    if errs:
+        return jsonify({"ok": False, "error": errs[0], "errors": errs}), 400
+    clean = _drop_noop_rows({k: {kk: vv for kk, vv in v.items() if kk != "wait_sec"} for k, v in clean.items()})
+    config_manager.update_scoped_thresholds(kind, key, clean)
+    cleared = changed = 0
+    if b.get("apply") and clean:
+        for d in devs_in:
+            ex = db.get_device_notify(d["id"]); thr = dict(ex.get("thresholds") or {}); hit = False
+            for m in clean:
+                row = thr.get(m)
+                if not isinstance(row, dict) or not any(f in row for f in ("warning", "critical", "enabled")):
+                    continue
+                keep = {kk: vv for kk, vv in row.items() if kk == "wait_sec" and vv not in (None, "")}
+                if keep: thr[m] = keep
+                else:    thr.pop(m, None)
+                hit = True; cleared += 1
+            if hit:
+                _save_notify_merged(d["id"], ex, thresholds=thr); changed += 1
+    db.audit_log(_email(), "set_scoped_thresholds", f"{kind}:{key}",
+                 f"{len(clean)} metric(s); {len(devs_in)} device(s); apply={bool(b.get('apply'))}; {cleared} override(s) removed")
+    return jsonify({"ok": True, "count": len(devs_in), "overrides_removed": cleared, "devices_changed": changed,
+                    "cleared_scope": not clean})
+
+_SOURCE_ORDER = ("global", "method", "type", "device config", "device override")
+
+def _threshold_sources(device, notify, scoped, global_thr):
+    """Which layer decides each metric: the highest layer that sets warning/critical/enabled for it."""
+    layers = (("global", global_thr or {}),
+              ("method " + (device.get("method") or ""), (scoped.get("method") or {}).get(device.get("method") or "") or {}),
+              ("type " + (device.get("type") or ""), (scoped.get("type") or {}).get(device.get("type") or "") or {}),
+              ("device config", device.get("thresholds") or {}),
+              ("this device", (notify or {}).get("thresholds") or {}))
+    out = {}
+    for label, layer in layers:
+        for m, row in (layer or {}).items():
+            if isinstance(row, dict) and any(f in row for f in ("warning", "critical", "enabled")):
+                out[m] = label
+    return out
+
+@app.route("/api/devices/<device_id>/thresholds", methods=["GET"])
+def api_get_device_thresholds(device_id):
+    """Everything the dashboard's device window needs: basics, live status, and for every metric of this device's
+    method the EFFECTIVE warning/critical, which layer decides it, and this device's own override."""
+    err = _require_admin()
+    if err: return err
+    d = _device_by_id(device_id)
+    if not d: return jsonify({"error": "Unknown device."}), 404
+    notify = db.get_device_notify(device_id)
+    gl, sc = config_manager.effective_global_thresholds(), config_manager.effective_scoped_thresholds()
+    eff = alerts_engine.effective_thresholds(d, gl, notify, sc)
+    src = _threshold_sources(d, notify, sc, gl)
+    own = notify.get("thresholds") or {}
+    meta = threshold_meta.public_catalogue()["metrics"]
+    keys = threshold_meta.METHOD_METRICS.get(d.get("method") or "ping", threshold_meta.DEVICE_METRICS)
+    st = next((r for r in db.get_all_device_status() if r["device_id"] == device_id), {}) or {}
+    rows = []
+    for k in keys:
+        e = eff.get(k, {})
+        rows.append({"key": k, "label": meta[k]["label"], "unit": meta[k]["unit"], "lower_is_worse": bool(meta[k].get("lower_is_worse")),
+                     "effective": {"warning": e.get("warning"), "critical": e.get("critical"), "enabled": e.get("enabled", True) is not False},
+                     "source": src.get(k, "built-in"), "override": {f: own.get(k, {}).get(f) for f in ("enabled", "warning", "critical", "wait_sec") if f in (own.get(k) or {})}})
+    return jsonify({
+        "device": {"id": device_id, "name": d.get("name"), "host": d.get("host"), "type": d.get("type") or "",
+                   "type_label": threshold_meta.TYPE_LABELS.get(d.get("type") or "", d.get("type") or ""),
+                   "method": d.get("method") or "", "method_label": threshold_meta.METHOD_LABELS.get(d.get("method") or "", d.get("method") or ""),
+                   "poll_interval_seconds": d.get("poll_interval_seconds"), "status": st.get("status", "unknown"),
+                   "last_checked": st.get("last_checked"), "last_error": st.get("last_error")},
+        "metrics": rows,
+        "notify": {"alert_trigger_mode": notify.get("alert_trigger_mode"), "escalation_after_sec_l1": notify.get("escalation_after_sec_l1"),
+                   "alert_notify_mode": notify.get("alert_notify_mode"), "notify_cooldown_sec": notify.get("notify_cooldown_sec"),
+                   "notifications_enabled": notify.get("notifications_enabled", 1)}})
+
+@app.route("/api/devices/<device_id>/thresholds", methods=["POST"])
+def api_set_device_thresholds(device_id):
+    """Body {thresholds: {metric: {enabled, warning, critical, wait_sec}}}. Saves THIS device's own overrides for the
+    metrics of its method; a metric missing from the body (or blank) goes back to inheriting. Everything else about
+    the device's notification settings is left exactly as it is."""
+    err = _require_admin()
+    if err: return err
+    d = _device_by_id(device_id)
+    if not d: return jsonify({"ok": False, "error": "Unknown device."}), 404
+    b = request.get_json(force=True) or {}
+    keys = threshold_meta.METHOD_METRICS.get(d.get("method") or "ping", threshold_meta.DEVICE_METRICS)
+    incoming = {k: v for k, v in (b.get("thresholds") or {}).items() if k in keys}
+    clean, errs = threshold_meta.validate_thresholds(incoming)
+    if errs:
+        return jsonify({"ok": False, "error": errs[0], "errors": errs}), 400
+    ex = db.get_device_notify(device_id)
+    thr = {k: v for k, v in (ex.get("thresholds") or {}).items() if k not in keys}
+    thr.update(_drop_noop_rows(clean))
+    _save_notify_merged(device_id, ex, thresholds=thr)
+    db.audit_log(_email(), "set_device_thresholds", device_id, f"{len(clean)} override(s)")
+    return jsonify({"ok": True, "overrides": len(_drop_noop_rows(clean))})
+
+
 # ── V11.3 patch 03: offline-detection settings (fewer false "offline" alerts) ──────────────────────
 @app.route("/api/settings/offline-detection", methods=["GET"])
 def api_get_offline_detection():
@@ -1998,7 +2159,7 @@ def api_urlmonitor_results():
         # V11.3 patch 02: colour the Sites table with the SAME thresholds the alert engine uses
         try:
             eff = alerts_engine.effective_thresholds({**saved, "id": r["device_id"]}, config_manager.effective_global_thresholds(),
-                                              db.get_device_notify(r["device_id"]))
+                                              db.get_device_notify(r["device_id"]), config_manager.effective_scoped_thresholds())
             for mk, rk in (("ssl_days_left", "ssl_state"), ("response_ms", "response_state")):
                 if r["metrics"].get(mk) is not None:
                     r[rk] = alerts_engine.evaluate_metric_state(r["metrics"][mk], eff.get(mk))

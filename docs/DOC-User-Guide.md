@@ -69,3 +69,9 @@ Every time something changes state (goes down, comes back up, crosses a warning/
 ## Getting help
 
 For anything about configuring alerts, adding devices, or managing accounts, that's covered in the Admin Guide — ask whoever administers your Net-monit installation.
+
+## Opening a device from the dashboard (V11.3 patch 04)
+
+**Double-click a tile** to open that device's window: its type and method, live status, last error and the thresholds that apply to it. Administrators can change the device's own thresholds there and jump to the full device or notification settings. In *Settings*, the Monitors, Escalation, Notifications and Thresholds lists have **Type** and **Method** filters.
+
+The **Devices** page also has the Type and Method filters and a **Group by** list, so you can see, for example, only the firewalls or all devices grouped by how they are checked.
