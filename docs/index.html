@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net-monit Live Demo</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--tx:#1b2330;--mu:#667085;--bd:#dde3ec;--pri:#2563eb;--ok:#16a34a;--wa:#d97706;--cr:#dc2626}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1520;--card:#182131;--tx:#e6ebf5;--mu:#93a0b8;--bd:#2a3650;--pri:#5b8cff;--ok:#34d27b;--wa:#f5a524;--cr:#ff6b6b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,Segoe UI,sans-serif}
+.demo{background:var(--wa);color:#000;text-align:center;padding:6px;font-weight:600}
+.wrap{display:flex;min-height:calc(100vh - 30px)}
+nav{width:190px;background:var(--card);border-right:1px solid var(--bd);padding:12px;flex-shrink:0}
+nav h2{margin:0 0 12px;font-size:17px}nav a{display:block;padding:9px 10px;border-radius:8px;color:var(--tx);text-decoration:none;cursor:pointer;margin-bottom:2px}
+nav a.on,nav a:hover{background:var(--pri);color:#fff}
+main{flex:1;padding:18px;min-width:0}h1{margin:0 0 14px;font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.grid .card{margin:0}.big{font-size:28px;font-weight:700}.mu{color:var(--mu)}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:600}
+.b{display:inline-block;padding:2px 9px;border-radius:99px;color:#fff;font-size:12px}.up{background:var(--ok)}.warning{background:var(--wa)}.critical{background:var(--cr)}
+button,select,input{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button{background:var(--pri);color:#fff;border:0;cursor:pointer}button.g{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.gauge{font-size:54px;font-weight:700;text-align:center;margin:8px 0}.bar{height:12px;background:var(--bd);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--pri)}
+#modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:16px}#modal .card{max-width:440px;width:100%;margin:0}
+.msg{color:var(--cr);margin:6px 0;min-height:18px}.okm{color:var(--ok)}
+@media(max-width:700px){.wrap{flex-direction:column}nav{width:auto;display:flex;flex-wrap:wrap;gap:4px}nav h2{width:100%}}
+</style></head><body>
+<div class="demo">LIVE DEMO: simulated data, runs entirely in your browser. Nothing is sent anywhere. <a href="https://github.com/MohamedAbdullahKhan/Net-Monit" style="color:#000">Get the real app on GitHub</a></div>
+<div class="wrap"><nav><h2>Net-monit</h2>
+<a data-p="dash" class="on">Dashboard</a><a data-p="dev">Devices</a><a data-p="alerts">Alerts <span id="ac"></span></a><a data-p="thr">Thresholds</a><a data-p="speed">Speed Test</a><a data-p="scan">Network Scan</a><a data-p="lic">License</a>
+<a id="reset" style="margin-top:14px;border:1px dashed var(--bd)">Reset demo</a></nav>
+<main id="m"></main></div>
+<div id="modal"><div class="card" id="mc"></div></div>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const R=(a,b)=>a+Math.random()*(b-a);
+const TH0=()=>({server:{cpu:{n:"CPU %",w:80,c:95,d:"a",min:1,max:100},mem:{n:"Memory %",w:85,c:95,d:"a",min:1,max:100},disk:{n:"Disk %",w:85,c:95,d:"a",min:1,max:100},rtt:{n:"Ping RTT (ms)",w:100,c:300,d:"a",min:1,max:5000}},
+website:{resp:{n:"Response time (ms)",w:1000,c:3000,d:"a",min:10,max:60000},ssl:{n:"SSL days left",w:30,c:7,d:"b",min:0,max:825},rtt:{n:"TCP connect (ms)",w:200,c:600,d:"a",min:1,max:5000}}});
+const DEV0=()=>[
+{id:1,name:"core-sw-01",type:"server",ip:"10.0.0.2",v:{cpu:22,mem:41,disk:35,rtt:3}},
+{id:2,name:"fw-edge",type:"server",ip:"10.0.0.1",v:{cpu:55,mem:62,disk:48,rtt:4}},
+{id:3,name:"db-prod-01",type:"server",ip:"10.0.1.20",v:{cpu:78,mem:83,disk:81,rtt:6}},
+{id:4,name:"file-srv",type:"server",ip:"10.0.1.30",v:{cpu:30,mem:50,disk:88,rtt:5}},
+{id:5,name:"infoxtek.com",type:"website",ip:"https://infoxtek.com",v:{resp:420,ssl:64,rtt:38}},
+{id:6,name:"portal.example",type:"website",ip:"https://portal.example",v:{resp:950,ssl:12,rtt:90}}];
+let S;
+function init(){S={dev:DEV0(),th:TH0(),alerts:[],seen:{},next:7};}
+init();
+function lvl(d,k){const t=S.th[d.type][k],v=d.v[k];if(t.d==="a")return v>=t.c?"critical":v>=t.w?"warning":"up";return v<=t.c?"critical":v<=t.w?"warning":"up"}
+function dst(d){const l=Object.keys(d.v).map(k=>lvl(d,k));return l.includes("critical")?"critical":l.includes("warning")?"warning":"up"}
+function tick(){S.dev.forEach(d=>{for(const k in d.v){const t=S.th[d.type][k];let j=t.max>=1000?d.v[k]*.06:2.5;
+ d.v[k]=Math.min(t.max,Math.max(t.min,d.v[k]+R(-j,j)));if(k==="ssl")d.v[k]=Math.max(0,d.v[k]-R(0,.02));
+ const L=lvl(d,k),key=d.id+k;if(L!=="up"&&S.seen[key]!==L){S.seen[key]=L;const th=S.th[d.type][k];
+ S.alerts.unshift({t:new Date().toLocaleTimeString(),dev:d.name,lv:L,msg:`${th.n}: ${d.v[k].toFixed(0)}, threshold ${L==="critical"?th.c:th.w}`,ack:false})}
+ else if(L==="up")delete S.seen[key]}});S.alerts=S.alerts.slice(0,60)}
+const badge=s=>`<span class="b ${s}">${s==="up"?"UP":s.toUpperCase()}</span>`;
+const unit=(d)=>Object.entries(d.v).map(([k,v])=>`${S.th[d.type][k].n}: ${v.toFixed(0)}`).join(" · ");
+let page="dash",filt="all",q="";
+const P={
+dash(){const c={up:0,warning:0,critical:0};S.dev.forEach(d=>c[dst(d)]++);
+ return `<h1>Dashboard</h1><div class="grid"><div class="card"><div class="mu">Devices</div><div class="big">${S.dev.length}</div></div>
+ <div class="card"><div class="mu">Up</div><div class="big" style="color:var(--ok)">${c.up}</div></div>
+ <div class="card"><div class="mu">Warning</div><div class="big" style="color:var(--wa)">${c.warning}</div></div>
+ <div class="card"><div class="mu">Critical</div><div class="big" style="color:var(--cr)">${c.critical}</div></div></div>
+ <div class="card tw"><table><tr><th>Name</th><th>Type</th><th>Status</th><th>Live metrics (updates every 2s)</th></tr>
+ ${S.dev.map(d=>`<tr style="cursor:pointer" data-open="${d.id}"><td>${d.name}</td><td>${d.type}</td><td>${badge(dst(d))}</td><td class="mu">${unit(d)}</td></tr>`).join("")}</table></div>
+ <p class="mu">Click a row for details. Lower the thresholds on the Thresholds page and watch alerts fire.</p>`},
+dev(){const l=S.dev.filter(d=>(filt==="all"||d.type===filt)&&d.name.toLowerCase().includes(q));
+ return `<h1>Devices</h1><div class="row"><input id="q" placeholder="Search name" value="${q}"><select id="f"><option value="all">All types</option><option value="server"${filt==="server"?" selected":""}>Servers</option><option value="website"${filt==="website"?" selected":""}>Websites</option></select></div>
+ <div class="card"><b>Add device</b><div class="row" style="margin-top:8px"><input id="an" placeholder="Name"><select id="at"><option value="server">Server</option><option value="website">Website</option></select><input id="ai" placeholder="IP or URL"><button id="ad">Add</button></div><div class="msg" id="am"></div></div>
+ <div class="card tw"><table><tr><th>Name</th><th>Type</th><th>Address</th><th>Status</th><th></th></tr>
+ ${l.map(d=>`<tr><td>${d.name}</td><td>${d.type}</td><td>${d.ip}</td><td>${badge(dst(d))}</td><td><button class="g" data-chk="${d.id}">Check now</button> <button class="g" data-del="${d.id}">Delete</button></td></tr>`).join("")||"<tr><td>No devices</td></tr>"}</table></div>`},
+alerts(){return `<h1>Alerts</h1><div class="card tw"><table><tr><th>Time</th><th>Device</th><th>Level</th><th>Message</th><th></th></tr>
+ ${S.alerts.map((a,i)=>`<tr style="opacity:${a.ack?.5:1}"><td>${a.t}</td><td>${a.dev}</td><td>${badge(a.lv)}</td><td>${a.msg}</td><td>${a.ack?"Acknowledged":`<button class="g" data-ack="${i}">Acknowledge</button>`}</td></tr>`).join("")||"<tr><td class=mu>No alerts yet. Wait a few seconds or lower a threshold.</td></tr>"}</table></div>`},
+thr(){let h=`<h1>Thresholds</h1><p class="mu">Websites and servers have different metrics, like the real app. Invalid values are refused.</p>`;
+ for(const t in S.th){h+=`<div class="card tw"><b>${t==="server"?"Servers":"Websites"}</b><table><tr><th>Metric</th><th>Alert when</th><th>Warning</th><th>Critical</th><th>Allowed</th></tr>`;
+ for(const k in S.th[t]){const m=S.th[t][k];h+=`<tr><td>${m.n}</td><td>${m.d==="a"?"above":"below"}</td><td><input size=6 data-t="${t}" data-k="${k}" data-f="w" value="${m.w}"></td><td><input size=6 data-t="${t}" data-k="${k}" data-f="c" value="${m.c}"></td><td class="mu">${m.min} to ${m.max}</td></tr>`}
+ h+=`</table></div>`}
+ return h+`<div class="row"><button id="sv">Save</button><button class="g" id="rc">Fill recommended values</button></div><div class="msg" id="tm"></div>`},
+speed(){return `<h1>Speed Test</h1><div class="card"><div class="gauge" id="gv">0.0</div><div class="mu" style="text-align:center" id="gp">Idle (Mbps)</div>
+ <div class="bar" style="margin:12px 0"><i id="gb"></i></div><div class="row"><button id="go">Start test</button></div>
+ <table id="gr"></table><p class="mu">Simulated numbers. The real app measures your route to Cloudflare.</p></div>`},
+scan(){return `<h1>Network Scan</h1><div class="card"><div class="row"><input id="sn" value="10.0.1.0/24"><button id="sg">Scan</button></div><div class="bar"><i id="sb"></i></div>
+ <div class="tw"><table id="sr"><tr><th>Host</th><th>Type</th><th>TCP</th><th>UDP</th></tr></table></div><p class="mu">Simulated results. The real app scans TCP and UDP ports and detects device type via SNMP.</p></div>`},
+lic(){return `<h1>License</h1><div class="card"><p>Device ID: <b>DEMO-7F3A-91C2</b><br>Activation Code: <b>A1B2-C3D4</b></p>
+ <p class="mu">The real app shows your own IDs. You send both to the vendor and get a free key.</p>
+ <input id="lk" style="width:100%" placeholder="Paste license key starting with NM1-"><div class="row" style="margin-top:8px"><button id="la">Activate License</button></div><div class="msg" id="lm"></div>
+ <p class="mu">Demo only checks the NM1- prefix. Real keys are Ed25519-signed and verified offline.</p></div>`}};
+function render(){$("#m").innerHTML=P[page]();$("#ac").textContent=S.alerts.filter(a=>!a.ack).length||"";
+ document.querySelectorAll("nav a[data-p]").forEach(a=>a.classList.toggle("on",a.dataset.p===page))}
+document.addEventListener("click",e=>{const t=e.target,d=t.dataset;
+ if(d.p){page=d.p;render()}
+ else if(t.id==="reset"){init();page="dash";render()}
+ else if(d.open){const v=S.dev.find(x=>x.id==d.open);$("#mc").innerHTML=`<h2 style="margin-top:0">${v.name} ${badge(dst(v))}</h2><p class="mu">${v.type} · ${v.ip}</p>${Object.keys(v.v).map(k=>`<p>${S.th[v.type][k].n}: <b>${v.v[k].toFixed(1)}</b> ${badge(lvl(v,k))}</p>`).join("")}<button id="cl">Close</button>`;$("#modal").style.display="flex"}
+ else if(t.id==="cl"||t.id==="modal")$("#modal").style.display="none";
+ else if(d.del){S.dev=S.dev.filter(x=>x.id!=d.del);render()}
+ else if(d.chk){const v=S.dev.find(x=>x.id==d.chk);t.textContent="Checked: "+dst(v).toUpperCase()}
+ else if(d.ack){S.alerts[d.ack].ack=true;render()}
+ else if(t.id==="ad"){const n=$("#an").value.trim(),i=$("#ai").value.trim(),ty=$("#at").value;
+  if(!n||!i){$("#am").textContent="Name and address are required.";return}
+  S.dev.push({id:S.next++,name:n,type:ty,ip:i,v:ty==="server"?{cpu:25,mem:40,disk:30,rtt:5}:{resp:500,ssl:90,rtt:50}});render()}
+ else if(t.id==="sv"){let err="";const ns=JSON.parse(JSON.stringify(S.th));
+  document.querySelectorAll("[data-t]").forEach(i=>{ns[i.dataset.t][i.dataset.k][i.dataset.f]=parseFloat(i.value)});
+  for(const a in ns)for(const k in ns[a]){const m=ns[a][k];
+   if(isNaN(m.w)||isNaN(m.c)||m.w<m.min||m.w>m.max||m.c<m.min||m.c>m.max)err=`${m.n}: values must be between ${m.min} and ${m.max}`;
+   else if(m.d==="a"&&m.w>=m.c)err=`${m.n}: warning must be below critical`;
+   else if(m.d==="b"&&m.w<=m.c)err=`${m.n}: warning must be above critical`}
+  const el=$("#tm");if(err){el.className="msg";el.textContent=err}else{S.th=ns;S.seen={};el.className="msg okm";el.textContent="Saved. New thresholds apply on the next check."}}
+ else if(t.id==="rc"){S.th=TH0();render()}
+ else if(t.id==="go")speed(t);
+ else if(t.id==="sg")scan(t);
+ else if(t.id==="la"){const k=$("#lk").value.trim(),m=$("#lm");if(k.startsWith("NM1-")&&k.length>20){m.className="msg okm";m.textContent="License activated (demo)."}else{m.className="msg";m.textContent="Invalid key. Real keys start with NM1- and are about 127 characters."}}});
+document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value.toLowerCase();const p=e.target.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)}});
+document.addEventListener("change",e=>{if(e.target.id==="f"){filt=e.target.value;render()}});
+function speed(b){b.disabled=true;$("#gr").innerHTML="";let ph=0,p=0,dl=0,ul=0,tg=R(180,420);
+ const iv=setInterval(()=>{p+=2;const ct=ph?tg*.4:tg;const v=ct*Math.min(1,p/20)*R(.9,1.05);$("#gv").textContent=v.toFixed(1);$("#gb").style.width=p+"%";$("#gp").textContent=(ph?"Upload":"Download")+" (Mbps)";
+  if(p>=100){if(!ph){dl=v;ph=1;p=0}else{ul=v;clearInterval(iv);b.disabled=false;$("#gp").textContent="Done";$("#gr").innerHTML=`<tr><th>Download</th><td>${dl.toFixed(1)} Mbps</td></tr><tr><th>Upload</th><td>${ul.toFixed(1)} Mbps</td></tr><tr><th>Latency</th><td>${R(8,25).toFixed(0)} ms</td></tr>`}}},80)}
+function scan(b){b.disabled=true;const t=$("#sr");t.innerHTML="<tr><th>Host</th><th>Type</th><th>TCP</th><th>UDP</th></tr>";let p=0;const base=($("#sn").value.split("/")[0]||"10.0.1.0").split(".").slice(0,3).join(".");
+ const pool=[["Windows server","3389, 445","-"],["Linux server","22, 80","123"],["Switch","22, 443","161"],["Printer","9100, 80","161"],["Router","22, 443","53, 161"]];
+ const iv=setInterval(()=>{p+=10;$("#sb").style.width=p+"%";if(p%20===0){const h=pool[Math.floor(R(0,pool.length))];t.insertAdjacentHTML("beforeend",`<tr><td>${base}.${Math.floor(R(2,250))}</td><td>${h[0]}</td><td>${h[1]}</td><td>${h[2]}</td></tr>`)}
+  if(p>=100){clearInterval(iv);b.disabled=false}},250)}
+document.querySelectorAll("nav a[data-p]").forEach(a=>0);
+setInterval(()=>{tick();if(page==="dash"||page==="alerts"){const ae=document.activeElement;if(!(ae&&ae.tagName==="INPUT"))render()}else $("#ac").textContent=S.alerts.filter(a=>!a.ack).length||""},2000);
+tick();render();
+</script></body></html>
