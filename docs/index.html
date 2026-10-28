@@ -1,126 +1,647 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Net-monit Live Demo</title>
+<html lang="en">
+<head>
+<script src="static/js/demo-shim.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Net-monit V11.3</title>
+  <link rel="stylesheet" href="static/css/style.css">
+  <link rel="icon" type="image/svg+xml" href="static/img/favicon.svg">
+  <!-- V10.1: admin-set appearance defaults, injected before theme.js runs so
+       its early-init can fall back to these (for anonymous visitors and
+       first-time users) instead of a hardcoded value. tojson handles the
+       escaping, so this is safe even though the accent/bg colours are
+       admin-supplied strings. bg_image is deliberately NOT included here --
+       it can be up to 4MB and inlining that into every page's raw HTML,
+       including pages nobody ever customised, isn't worth it just to avoid
+       one brief post-load flash; see theme.js's syncDefaultBgImage(). -->
+  <script>
+    window.__NETMON_DEFAULTS__ = {
+      theme: "dark",
+      accent: "#0078d4",
+      bg_color: ""
+    };
+  </script>
+  <!-- theme.js loads in <head> and applies theme synchronously before first paint -->
+  <script src="static/js/theme.js"></script>
+</head>
+<body>
+  <!-- Toast container -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- Login overlay -->
+  <div id="login-overlay" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:380px;">
+      <div class="modal-header">
+        <span class="modal-title">Sign in to Net-monit</span>
+        <button class="icon-btn" id="login-close" title="Close">✕</button>
+      </div>
+      <div style="padding:20px;">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+          Enter your email and access token. Contact your admin if you need credentials.
+        </p>
+        <div class="field"><label>Email</label>
+          <input id="li-email" type="email" placeholder="you@company.com" autocomplete="username"></div>
+        <div class="field" style="margin-top:10px;"><label>Access Token</label>
+          <input id="li-token" type="password" placeholder="Your token" autocomplete="current-password"></div>
+        <div id="li-error" style="color:var(--status-critical);font-size:13px;margin-top:8px;"></div>
+        <button id="li-submit" class="btn primary" style="width:100%;margin-top:14px;">Sign in</button>
+        <p style="text-align:center;margin-top:10px;">
+          <a href="#" id="li-forgot-link" style="font-size:12.5px;color:var(--text-muted);">Forgot your token?</a>
+        </p>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;">
+          Net-monit V11.3 · © 2024–2026 Abdullah
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- V10.0: Forgot token / reset flow, OTP-based. Four internal views
+       toggled via JS (request email -> enter code -> choose new token ->
+       done) rather than the old link-click flow, which auto-generated
+       the replacement token and never asked the user for a code at all. -->
+  <div id="forgot-token-overlay" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-header">
+        <span class="modal-title" id="ft-title">Reset your token</span>
+        <button class="icon-btn" id="ft-close" title="Close">✕</button>
+      </div>
+      <div style="padding:20px;">
+
+        <div id="ft-request-view">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+            Enter the email address on your Net-monit account. If it's registered, we'll email you a
+            6-digit verification code — it expires in 10 minutes.
+          </p>
+          <div class="field"><label>Email</label>
+            <input id="ft-email" type="email" placeholder="you@company.com" autocomplete="username"></div>
+          <button id="ft-request-submit" class="btn primary" style="width:100%;margin-top:14px;">Send code</button>
+          <div id="ft-request-error" style="color:var(--status-critical);font-size:13px;margin-top:8px;"></div>
+        </div>
+
+        <div id="ft-otp-view" class="hidden">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">
+            If that email is registered, a 6-digit code is on its way — check your inbox (and spam
+            folder). Enter it below; it expires in 10 minutes.
+          </p>
+          <div class="field"><label>Verification code</label>
+            <input id="ft-otp" type="text" inputmode="numeric" maxlength="6" placeholder="123456"
+              style="letter-spacing:6px;font-size:20px;text-align:center;font-family:var(--font-mono);"></div>
+          <button id="ft-otp-submit" class="btn primary" style="width:100%;margin-top:14px;">Verify code</button>
+          <div id="ft-otp-error" style="color:var(--status-critical);font-size:13px;margin-top:8px;"></div>
+          <button id="ft-otp-resend" class="btn secondary" style="width:100%;margin-top:8px;" type="button">Send a new code</button>
+        </div>
+
+        <div id="ft-newtoken-view" class="hidden">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+            Code verified. Choose your new access token — type your own, or generate a random one.
+          </p>
+          <div class="field"><label>New access token <span style="color:var(--text-muted);font-weight:400;">(minimum 8 characters)</span></label>
+            <div style="display:flex;gap:8px;">
+              <input id="ft-new-token-input" type="text" placeholder="Enter or generate a token" style="flex:1;">
+              <button id="ft-generate-token" class="btn secondary small" type="button">Generate</button>
+            </div>
+          </div>
+          <button id="ft-newtoken-submit" class="btn primary" style="width:100%;margin-top:14px;">Set my new token</button>
+          <div id="ft-newtoken-error" style="color:var(--status-critical);font-size:13px;margin-top:8px;"></div>
+        </div>
+
+        <div id="ft-result-view" class="hidden">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">
+            Your token has been updated. <strong>Save it now if you didn't choose one you already know:</strong>
+          </p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <code id="ft-new-token" style="flex:1;background:var(--bg-hover);padding:8px 10px;
+                  border-radius:6px;font-size:14px;word-break:break-all;"></code>
+            <button id="ft-copy-token" class="btn secondary small" type="button">Copy</button>
+          </div>
+          <button id="ft-result-login" class="btn primary" style="width:100%;margin-top:16px;">Continue to sign in</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="index.html" class="brand" id="brand-link">
+        <span id="brand-default">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          NET-MONIT
+        </span>
+      </a>
+      <nav class="topbar-nav">
+        <a href="admin.html"    class="nav-link">Admin Panel</a>
+        <a href="activation.html" class="nav-link" id="nav-license" style="display:none;">License</a>
+        <a href="about.html" class="nav-link">About Net-monit V11.3</a>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <span id="brand-org" class="hidden" style="display:none;align-items:center;gap:8px;padding-right:14px;margin-right:4px;border-right:1px solid var(--border);">
+        <img id="brand-org-logo" src="" alt="" style="height:22px;max-width:130px;object-fit:contain;display:none;">
+        <span id="brand-org-name" style="font-size:13px;font-weight:700;color:var(--text-muted);"></span>
+      </span>
+      <div id="theme-switcher-topbar" class="theme-switcher" title="Theme"></div>
+      <span id="topbar-version" class="badge-version">V11.3</span>
+      <div id="session-info" class="session-area" style="display:none;">
+        <span id="session-email" class="session-email"></span>
+        <span id="session-role-badge" class="role-badge"></span>
+        <button id="btn-signout" class="btn secondary small">Sign out</button>
+      </div>
+      <button id="btn-signin" class="btn primary small">Sign in</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div class="layout">
+    <aside class="sidebar">
+      <nav>
+        <a href="index.html" class="sidebar-link active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Infrastructure Overview
+        </a>
+        <a href="devices.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Devices
+        </a>
+        <a href="speedtest.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Speed Test
+        </a>
+        <a href="urlmonitor.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Sites Monitor
+        </a>
+        <a href="networkscan.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="8" height="8" rx="1"/></svg>
+          Network Scan
+        </a>
+        <a href="settings.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </a>
+        <a href="alerts.html" class="sidebar-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Alert Event Logs
+          <span id="sidebar-alert-badge" class="alert-count-badge" style="display:none;">0</span>
+        </a>
+      </nav>
+      <div id="sidebar-status" style="margin-top:auto;padding:16px 14px;border-top:1px solid var(--border);">
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;">
+          <div><span class="dot ok"></span> Normal</div>
+          <div><span class="dot warning"></span> Warning</div>
+          <div><span class="dot critical"></span> Critical</div>
+          <div><span class="dot offline"></span> Offline</div>
+        </div>
+        <div id="sidebar-session" style="margin-top:12px;font-size:12px;color:var(--text-muted);"></div>
+      </div>
+    </aside>
+    <main class="main-content">
+      
+
+<!-- Page header -->
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Infrastructure Overview</h1>
+    <p id="last-updated" class="page-sub">Live operational monitoring of network devices, uplinks, and application health.</p>
+  </div>
+  <div id="summary-bar" class="summary-bar"></div>
+</div>
+
+<!-- ── V7.2: Infrastructure Overview telemetry cards (NISM-inspired) ─────── -->
+<div class="io-cards" id="io-cards">
+  <div class="io-card">
+    <div class="io-card-top">
+      <span class="io-card-lbl">WAN Download</span>
+      <span class="io-card-icon io-icon-green">&#8595;</span>
+    </div>
+    <div class="io-card-val" id="io-download">-- <span class="io-card-unit">Mbps</span></div>
+    <div class="io-card-sub" id="io-isp">Run a speed test to populate</div>
+  </div>
+  <div class="io-card">
+    <div class="io-card-top">
+      <span class="io-card-lbl">WAN Upload</span>
+      <span class="io-card-icon io-icon-blue">&#8593;</span>
+    </div>
+    <div class="io-card-val" id="io-upload">-- <span class="io-card-unit">Mbps</span></div>
+    <div class="io-card-sub" id="io-ping">Ping: -- ms</div>
+  </div>
+  <div class="io-card">
+    <div class="io-card-top">
+      <span class="io-card-lbl">Network Devices</span>
+      <span class="io-card-icon io-icon-indigo">&#9639;</span>
+    </div>
+    <div class="io-card-val" id="io-devices-online">0 <span class="io-card-unit" id="io-devices-total">/ 0 Online</span></div>
+    <div class="io-card-sub" id="io-devices-msg">All nodes reporting online</div>
+  </div>
+  <div class="io-card">
+    <div class="io-card-top">
+      <span class="io-card-lbl">Web Application Availability</span>
+      <span class="io-card-icon io-icon-cyan">&#127760;</span>
+    </div>
+    <div class="io-card-val" id="io-apps-online">0 <span class="io-card-unit" id="io-apps-total">/ 0 Online</span></div>
+    <div class="io-card-sub" id="io-apps-msg">No web apps configured yet</div>
+  </div>
+</div>
+
 <style>
-:root{--bg:#f4f6fa;--card:#fff;--tx:#1b2330;--mu:#667085;--bd:#dde3ec;--pri:#2563eb;--ok:#16a34a;--wa:#d97706;--cr:#dc2626}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1520;--card:#182131;--tx:#e6ebf5;--mu:#93a0b8;--bd:#2a3650;--pri:#5b8cff;--ok:#34d27b;--wa:#f5a524;--cr:#ff6b6b}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,Segoe UI,sans-serif}
-.demo{background:var(--wa);color:#000;text-align:center;padding:6px;font-weight:600}
-.wrap{display:flex;min-height:calc(100vh - 30px)}
-nav{width:190px;background:var(--card);border-right:1px solid var(--bd);padding:12px;flex-shrink:0}
-nav h2{margin:0 0 12px;font-size:17px}nav a{display:block;padding:9px 10px;border-radius:8px;color:var(--tx);text-decoration:none;cursor:pointer;margin-bottom:2px}
-nav a.on,nav a:hover{background:var(--pri);color:#fff}
-main{flex:1;padding:18px;min-width:0}h1{margin:0 0 14px;font-size:20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
-.grid .card{margin:0}.big{font-size:28px;font-weight:700}.mu{color:var(--mu)}
-.tw{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:600}
-.b{display:inline-block;padding:2px 9px;border-radius:99px;color:#fff;font-size:12px}.up{background:var(--ok)}.warning{background:var(--wa)}.critical{background:var(--cr)}
-button,select,input{font:inherit;padding:7px 11px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
-button{background:var(--pri);color:#fff;border:0;cursor:pointer}button.g{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
-.gauge{font-size:54px;font-weight:700;text-align:center;margin:8px 0}.bar{height:12px;background:var(--bd);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--pri)}
-#modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:16px}#modal .card{max-width:440px;width:100%;margin:0}
-.msg{color:var(--cr);margin:6px 0;min-height:18px}.okm{color:var(--ok)}
-@media(max-width:700px){.wrap{flex-direction:column}nav{width:auto;display:flex;flex-wrap:wrap;gap:4px}nav h2{width:100%}}
-</style></head><body>
-<div class="demo">LIVE DEMO: simulated data, runs entirely in your browser. Nothing is sent anywhere. <a href="https://github.com/MohamedAbdullahKhan/Net-Monit" style="color:#000">Get the real app on GitHub</a></div>
-<div class="wrap"><nav><h2>Net-monit</h2>
-<a data-p="dash" class="on">Dashboard</a><a data-p="dev">Devices</a><a data-p="alerts">Alerts <span id="ac"></span></a><a data-p="thr">Thresholds</a><a data-p="speed">Speed Test</a><a data-p="scan">Network Scan</a><a data-p="lic">License</a>
-<a id="reset" style="margin-top:14px;border:1px dashed var(--bd)">Reset demo</a></nav>
-<main id="m"></main></div>
-<div id="modal"><div class="card" id="mc"></div></div>
-<script>
-"use strict";
-const $=s=>document.querySelector(s);
-const R=(a,b)=>a+Math.random()*(b-a);
-const TH0=()=>({server:{cpu:{n:"CPU %",w:80,c:95,d:"a",min:1,max:100},mem:{n:"Memory %",w:85,c:95,d:"a",min:1,max:100},disk:{n:"Disk %",w:85,c:95,d:"a",min:1,max:100},rtt:{n:"Ping RTT (ms)",w:100,c:300,d:"a",min:1,max:5000}},
-website:{resp:{n:"Response time (ms)",w:1000,c:3000,d:"a",min:10,max:60000},ssl:{n:"SSL days left",w:30,c:7,d:"b",min:0,max:825},rtt:{n:"TCP connect (ms)",w:200,c:600,d:"a",min:1,max:5000}}});
-const DEV0=()=>[
-{id:1,name:"core-sw-01",type:"server",ip:"10.0.0.2",v:{cpu:22,mem:41,disk:35,rtt:3}},
-{id:2,name:"fw-edge",type:"server",ip:"10.0.0.1",v:{cpu:55,mem:62,disk:48,rtt:4}},
-{id:3,name:"db-prod-01",type:"server",ip:"10.0.1.20",v:{cpu:78,mem:83,disk:81,rtt:6}},
-{id:4,name:"file-srv",type:"server",ip:"10.0.1.30",v:{cpu:30,mem:50,disk:88,rtt:5}},
-{id:5,name:"infoxtek.com",type:"website",ip:"https://infoxtek.com",v:{resp:420,ssl:64,rtt:38}},
-{id:6,name:"portal.example",type:"website",ip:"https://portal.example",v:{resp:950,ssl:12,rtt:90}}];
-let S;
-function init(){S={dev:DEV0(),th:TH0(),alerts:[],seen:{},next:7};}
-init();
-function lvl(d,k){const t=S.th[d.type][k],v=d.v[k];if(t.d==="a")return v>=t.c?"critical":v>=t.w?"warning":"up";return v<=t.c?"critical":v<=t.w?"warning":"up"}
-function dst(d){const l=Object.keys(d.v).map(k=>lvl(d,k));return l.includes("critical")?"critical":l.includes("warning")?"warning":"up"}
-function tick(){S.dev.forEach(d=>{for(const k in d.v){const t=S.th[d.type][k];let j=t.max>=1000?d.v[k]*.06:2.5;
- d.v[k]=Math.min(t.max,Math.max(t.min,d.v[k]+R(-j,j)));if(k==="ssl")d.v[k]=Math.max(0,d.v[k]-R(0,.02));
- const L=lvl(d,k),key=d.id+k;if(L!=="up"&&S.seen[key]!==L){S.seen[key]=L;const th=S.th[d.type][k];
- S.alerts.unshift({t:new Date().toLocaleTimeString(),dev:d.name,lv:L,msg:`${th.n}: ${d.v[k].toFixed(0)}, threshold ${L==="critical"?th.c:th.w}`,ack:false})}
- else if(L==="up")delete S.seen[key]}});S.alerts=S.alerts.slice(0,60)}
-const badge=s=>`<span class="b ${s}">${s==="up"?"UP":s.toUpperCase()}</span>`;
-const unit=(d)=>Object.entries(d.v).map(([k,v])=>`${S.th[d.type][k].n}: ${v.toFixed(0)}`).join(" · ");
-let page="dash",filt="all",q="";
-const P={
-dash(){const c={up:0,warning:0,critical:0};S.dev.forEach(d=>c[dst(d)]++);
- return `<h1>Dashboard</h1><div class="grid"><div class="card"><div class="mu">Devices</div><div class="big">${S.dev.length}</div></div>
- <div class="card"><div class="mu">Up</div><div class="big" style="color:var(--ok)">${c.up}</div></div>
- <div class="card"><div class="mu">Warning</div><div class="big" style="color:var(--wa)">${c.warning}</div></div>
- <div class="card"><div class="mu">Critical</div><div class="big" style="color:var(--cr)">${c.critical}</div></div></div>
- <div class="card tw"><table><tr><th>Name</th><th>Type</th><th>Status</th><th>Live metrics (updates every 2s)</th></tr>
- ${S.dev.map(d=>`<tr style="cursor:pointer" data-open="${d.id}"><td>${d.name}</td><td>${d.type}</td><td>${badge(dst(d))}</td><td class="mu">${unit(d)}</td></tr>`).join("")}</table></div>
- <p class="mu">Click a row for details. Lower the thresholds on the Thresholds page and watch alerts fire.</p>`},
-dev(){const l=S.dev.filter(d=>(filt==="all"||d.type===filt)&&d.name.toLowerCase().includes(q));
- return `<h1>Devices</h1><div class="row"><input id="q" placeholder="Search name" value="${q}"><select id="f"><option value="all">All types</option><option value="server"${filt==="server"?" selected":""}>Servers</option><option value="website"${filt==="website"?" selected":""}>Websites</option></select></div>
- <div class="card"><b>Add device</b><div class="row" style="margin-top:8px"><input id="an" placeholder="Name"><select id="at"><option value="server">Server</option><option value="website">Website</option></select><input id="ai" placeholder="IP or URL"><button id="ad">Add</button></div><div class="msg" id="am"></div></div>
- <div class="card tw"><table><tr><th>Name</th><th>Type</th><th>Address</th><th>Status</th><th></th></tr>
- ${l.map(d=>`<tr><td>${d.name}</td><td>${d.type}</td><td>${d.ip}</td><td>${badge(dst(d))}</td><td><button class="g" data-chk="${d.id}">Check now</button> <button class="g" data-del="${d.id}">Delete</button></td></tr>`).join("")||"<tr><td>No devices</td></tr>"}</table></div>`},
-alerts(){return `<h1>Alerts</h1><div class="card tw"><table><tr><th>Time</th><th>Device</th><th>Level</th><th>Message</th><th></th></tr>
- ${S.alerts.map((a,i)=>`<tr style="opacity:${a.ack?.5:1}"><td>${a.t}</td><td>${a.dev}</td><td>${badge(a.lv)}</td><td>${a.msg}</td><td>${a.ack?"Acknowledged":`<button class="g" data-ack="${i}">Acknowledge</button>`}</td></tr>`).join("")||"<tr><td class=mu>No alerts yet. Wait a few seconds or lower a threshold.</td></tr>"}</table></div>`},
-thr(){let h=`<h1>Thresholds</h1><p class="mu">Websites and servers have different metrics, like the real app. Invalid values are refused.</p>`;
- for(const t in S.th){h+=`<div class="card tw"><b>${t==="server"?"Servers":"Websites"}</b><table><tr><th>Metric</th><th>Alert when</th><th>Warning</th><th>Critical</th><th>Allowed</th></tr>`;
- for(const k in S.th[t]){const m=S.th[t][k];h+=`<tr><td>${m.n}</td><td>${m.d==="a"?"above":"below"}</td><td><input size=6 data-t="${t}" data-k="${k}" data-f="w" value="${m.w}"></td><td><input size=6 data-t="${t}" data-k="${k}" data-f="c" value="${m.c}"></td><td class="mu">${m.min} to ${m.max}</td></tr>`}
- h+=`</table></div>`}
- return h+`<div class="row"><button id="sv">Save</button><button class="g" id="rc">Fill recommended values</button></div><div class="msg" id="tm"></div>`},
-speed(){return `<h1>Speed Test</h1><div class="card"><div class="gauge" id="gv">0.0</div><div class="mu" style="text-align:center" id="gp">Idle (Mbps)</div>
- <div class="bar" style="margin:12px 0"><i id="gb"></i></div><div class="row"><button id="go">Start test</button></div>
- <table id="gr"></table><p class="mu">Simulated numbers. The real app measures your route to Cloudflare.</p></div>`},
-scan(){return `<h1>Network Scan</h1><div class="card"><div class="row"><input id="sn" value="10.0.1.0/24"><button id="sg">Scan</button></div><div class="bar"><i id="sb"></i></div>
- <div class="tw"><table id="sr"><tr><th>Host</th><th>Type</th><th>TCP</th><th>UDP</th></tr></table></div><p class="mu">Simulated results. The real app scans TCP and UDP ports and detects device type via SNMP.</p></div>`},
-lic(){return `<h1>License</h1><div class="card"><p>Device ID: <b>DEMO-7F3A-91C2</b><br>Activation Code: <b>A1B2-C3D4</b></p>
- <p class="mu">The real app shows your own IDs. You send both to the vendor and get a free key.</p>
- <input id="lk" style="width:100%" placeholder="Paste license key starting with NM1-"><div class="row" style="margin-top:8px"><button id="la">Activate License</button></div><div class="msg" id="lm"></div>
- <p class="mu">Demo only checks the NM1- prefix. Real keys are Ed25519-signed and verified offline.</p></div>`}};
-function render(){$("#m").innerHTML=P[page]();$("#ac").textContent=S.alerts.filter(a=>!a.ack).length||"";
- document.querySelectorAll("nav a[data-p]").forEach(a=>a.classList.toggle("on",a.dataset.p===page))}
-document.addEventListener("click",e=>{const t=e.target,d=t.dataset;
- if(d.p){page=d.p;render()}
- else if(t.id==="reset"){init();page="dash";render()}
- else if(d.open){const v=S.dev.find(x=>x.id==d.open);$("#mc").innerHTML=`<h2 style="margin-top:0">${v.name} ${badge(dst(v))}</h2><p class="mu">${v.type} · ${v.ip}</p>${Object.keys(v.v).map(k=>`<p>${S.th[v.type][k].n}: <b>${v.v[k].toFixed(1)}</b> ${badge(lvl(v,k))}</p>`).join("")}<button id="cl">Close</button>`;$("#modal").style.display="flex"}
- else if(t.id==="cl"||t.id==="modal")$("#modal").style.display="none";
- else if(d.del){S.dev=S.dev.filter(x=>x.id!=d.del);render()}
- else if(d.chk){const v=S.dev.find(x=>x.id==d.chk);t.textContent="Checked: "+dst(v).toUpperCase()}
- else if(d.ack){S.alerts[d.ack].ack=true;render()}
- else if(t.id==="ad"){const n=$("#an").value.trim(),i=$("#ai").value.trim(),ty=$("#at").value;
-  if(!n||!i){$("#am").textContent="Name and address are required.";return}
-  S.dev.push({id:S.next++,name:n,type:ty,ip:i,v:ty==="server"?{cpu:25,mem:40,disk:30,rtt:5}:{resp:500,ssl:90,rtt:50}});render()}
- else if(t.id==="sv"){let err="";const ns=JSON.parse(JSON.stringify(S.th));
-  document.querySelectorAll("[data-t]").forEach(i=>{ns[i.dataset.t][i.dataset.k][i.dataset.f]=parseFloat(i.value)});
-  for(const a in ns)for(const k in ns[a]){const m=ns[a][k];
-   if(isNaN(m.w)||isNaN(m.c)||m.w<m.min||m.w>m.max||m.c<m.min||m.c>m.max)err=`${m.n}: values must be between ${m.min} and ${m.max}`;
-   else if(m.d==="a"&&m.w>=m.c)err=`${m.n}: warning must be below critical`;
-   else if(m.d==="b"&&m.w<=m.c)err=`${m.n}: warning must be above critical`}
-  const el=$("#tm");if(err){el.className="msg";el.textContent=err}else{S.th=ns;S.seen={};el.className="msg okm";el.textContent="Saved. New thresholds apply on the next check."}}
- else if(t.id==="rc"){S.th=TH0();render()}
- else if(t.id==="go")speed(t);
- else if(t.id==="sg")scan(t);
- else if(t.id==="la"){const k=$("#lk").value.trim(),m=$("#lm");if(k.startsWith("NM1-")&&k.length>20){m.className="msg okm";m.textContent="License activated (demo)."}else{m.className="msg";m.textContent="Invalid key. Real keys start with NM1- and are about 127 characters."}}});
-document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value.toLowerCase();const p=e.target.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)}});
-document.addEventListener("change",e=>{if(e.target.id==="f"){filt=e.target.value;render()}});
-function speed(b){b.disabled=true;$("#gr").innerHTML="";let ph=0,p=0,dl=0,ul=0,tg=R(180,420);
- const iv=setInterval(()=>{p+=2;const ct=ph?tg*.4:tg;const v=ct*Math.min(1,p/20)*R(.9,1.05);$("#gv").textContent=v.toFixed(1);$("#gb").style.width=p+"%";$("#gp").textContent=(ph?"Upload":"Download")+" (Mbps)";
-  if(p>=100){if(!ph){dl=v;ph=1;p=0}else{ul=v;clearInterval(iv);b.disabled=false;$("#gp").textContent="Done";$("#gr").innerHTML=`<tr><th>Download</th><td>${dl.toFixed(1)} Mbps</td></tr><tr><th>Upload</th><td>${ul.toFixed(1)} Mbps</td></tr><tr><th>Latency</th><td>${R(8,25).toFixed(0)} ms</td></tr>`}}},80)}
-function scan(b){b.disabled=true;const t=$("#sr");t.innerHTML="<tr><th>Host</th><th>Type</th><th>TCP</th><th>UDP</th></tr>";let p=0;const base=($("#sn").value.split("/")[0]||"10.0.1.0").split(".").slice(0,3).join(".");
- const pool=[["Windows server","3389, 445","-"],["Linux server","22, 80","123"],["Switch","22, 443","161"],["Printer","9100, 80","161"],["Router","22, 443","53, 161"]];
- const iv=setInterval(()=>{p+=10;$("#sb").style.width=p+"%";if(p%20===0){const h=pool[Math.floor(R(0,pool.length))];t.insertAdjacentHTML("beforeend",`<tr><td>${base}.${Math.floor(R(2,250))}</td><td>${h[0]}</td><td>${h[1]}</td><td>${h[2]}</td></tr>`)}
-  if(p>=100){clearInterval(iv);b.disabled=false}},250)}
-document.querySelectorAll("nav a[data-p]").forEach(a=>0);
-setInterval(()=>{tick();if(page==="dash"||page==="alerts"){const ae=document.activeElement;if(!(ae&&ae.tagName==="INPUT"))render()}else $("#ac").textContent=S.alerts.filter(a=>!a.ack).length||""},2000);
-tick();render();
-</script></body></html>
+.io-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+  gap: 14px; margin-bottom: 18px;
+}
+.io-card {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 16px 18px;
+}
+.io-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.io-card-lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; font-family:var(--font-mono); }
+.io-card-icon { width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px; }
+.io-icon-green  { background:rgba(50,200,100,.12); color:#32c864; }
+.io-icon-blue   { background:rgba(0,120,215,.12);  color:#0078d4; }
+.io-icon-indigo { background:rgba(99,102,241,.12);  color:#6366f1; }
+.io-icon-cyan   { background:rgba(34,211,238,.12);  color:#22d3ee; }
+.io-card-val  { font-size:26px; font-weight:800; font-family:var(--font-mono); color:var(--text-primary); }
+.io-card-unit { font-size:12px; font-weight:600; color:var(--text-muted); }
+.io-card-sub  { font-size:11px; color:var(--text-muted); margin-top:4px; }
+.io-card-sub.warn { color:var(--status-warning); font-weight:600; }
+.io-card-sub.crit { color:var(--status-critical); font-weight:600; }
+</style>
+
+<!-- ── V7.2 Category filter tabs ──────────────────────────────────── -->
+<div class="category-tabs" id="category-tabs" style="margin-bottom:12px;">
+  <button class="cat-tab active" data-cat="all" onclick="setCategory('all')">
+    General <span class="cat-count" id="cnt-all">0</span>
+  </button>
+  <button class="cat-tab" data-cat="network" onclick="setCategory('network')">
+    Network <span class="cat-count" id="cnt-network">0</span>
+  </button>
+  <button class="cat-tab" data-cat="firewall" onclick="setCategory('firewall')">
+    Firewall <span class="cat-count" id="cnt-firewall">0</span>
+  </button>
+  <button class="cat-tab" data-cat="windows" onclick="setCategory('windows')">
+    Windows <span class="cat-count" id="cnt-windows">0</span>
+  </button>
+  <button class="cat-tab" data-cat="linux" onclick="setCategory('linux')">
+    Linux <span class="cat-count" id="cnt-linux">0</span>
+  </button>
+  <button class="cat-tab" data-cat="url" onclick="setCategory('url')">
+    URL <span class="cat-count" id="cnt-url">0</span>
+  </button>
+</div>
+
+<!-- ── V7.2 Dashboard toolbar ──────────────────────────────────────── -->
+<div class="dashboard-toolbar" id="dash-toolbar" style="margin-bottom:14px;">
+
+  <!-- View type toggle: Grid / List -->
+  <div class="view-toggle" id="view-toggle-group">
+    <button id="btn-view-grid" class="active" title="Grid view" onclick="setViewType('grid')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/>
+        <rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>
+      </svg>
+      Grid
+    </button>
+    <button id="btn-view-list" title="List view" onclick="setViewType('list')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      List
+    </button>
+  </div>
+
+  <!-- Grid density: 2 / 3 / 4 / Auto — only shown in Grid view -->
+  <div class="grid-density-row" id="grid-density-row">
+    <span>Columns:</span>
+    <button onclick="setGridCols(2)" data-cols="2">2</button>
+    <button onclick="setGridCols(3)" data-cols="3">3</button>
+    <button onclick="setGridCols(4)" data-cols="4">4</button>
+    <button onclick="setGridCols(5)" data-cols="5">5</button>
+    <button onclick="setGridCols(0)" data-cols="0" class="active" title="Auto (responsive)">Auto</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <!-- Refresh indicator -->
+  <span id="refresh-spinner" style="font-size:12px;color:var(--text-muted);display:none;">↻ Refreshing…</span>
+
+  <!-- Edit Layout toggle (only visible when logged in) -->
+  <button id="btn-edit-layout" class="btn secondary"
+          style="display:none;"
+          onclick="toggleEditMode()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+    Edit Layout
+  </button>
+
+  <!-- Add tile (admin only) -->
+  <button id="btn-add-tile" class="btn primary"
+          style="display:none;"
+          onclick="openQuickAdd()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Add tile
+  </button>
+</div>
+
+<!-- Edit mode banner (hidden by default) -->
+<div id="edit-mode-banner" class="edit-mode-banner" style="display:none;">
+  <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+  <span>
+    <strong>Edit Layout</strong> — Drag tiles to reorder · Use size buttons or corner handle to resize ·
+    <span style="color:var(--text-muted);">Hidden tiles shown with 50% opacity</span>
+  </span>
+  <div class="spacer"></div>
+  <button class="btn danger small" onclick="resetLayout()" title="Revert to shared default layout"
+          style="padding:4px 10px;font-size:11.5px;">
+    Reset
+  </button>
+  <button class="btn secondary small" onclick="cancelEditMode()" style="padding:4px 10px;font-size:11.5px;">
+    Cancel
+  </button>
+  <button class="btn primary small" id="btn-save-layout" onclick="saveLayout()" style="padding:4px 10px;font-size:11.5px;">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+    </svg>
+    Save Layout
+  </button>
+</div>
+
+<!-- Hidden tiles note -->
+<div id="hidden-tiles-note" style="display:none;align-items:center;gap:8px;margin-bottom:12px;
+  padding:8px 14px;background:rgba(242,184,75,.08);border:1px solid rgba(242,184,75,.25);
+  border-radius:var(--radius-sm);font-size:13px;">
+  <span style="color:var(--status-warning);">⚠</span>
+  <span><span class="hidden-count">0</span> device(s) hidden from dashboard — still monitored</span>
+  <button id="show-hidden-btn" class="btn secondary small" style="margin-left:auto;">Show all</button>
+</div>
+
+<!-- Device grid (class set dynamically by JS) -->
+<div id="device-grid" class="device-grid dash-grid"></div>
+
+<!-- Empty state -->
+<div id="empty-state" style="display:none;text-align:center;padding:60px 20px;color:var(--text-muted);">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+       style="margin-bottom:12px;opacity:.4">
+    <rect x="2" y="3" width="20" height="14" rx="2"/>
+    <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+  <p style="font-size:15px;font-weight:600;margin-bottom:6px;">No devices yet</p>
+  <p style="font-size:13px;">Sign in as admin and click <strong>Add tile</strong> to get started.</p>
+</div>
+
+<!-- Tile context menu (right-click, used outside edit mode) -->
+<div id="tile-ctx-menu" style="display:none;position:fixed;z-index:9999;
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:190px;overflow:hidden;">
+  <div style="padding:6px 0;">
+    <div style="padding:5px 14px 4px;font-size:10.6px;color:var(--text-muted);
+         text-transform:uppercase;letter-spacing:.06em;">Tile options</div>
+    <button class="ctx-item" onclick="menuHideTile()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+      </svg>
+      Hide tile (keep monitoring)
+    </button>
+    <button class="ctx-item danger" onclick="menuRemoveDevice()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+      Remove device permanently
+    </button>
+    <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
+    <div style="padding:5px 14px 3px;font-size:10.6px;color:var(--text-muted);
+         text-transform:uppercase;letter-spacing:.06em;">Resize tile</div>
+    <button class="ctx-item" onclick="menuResizeTile('normal')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+      </svg>Normal (1×1)
+    </button>
+    <button class="ctx-item" onclick="menuResizeTile('wide')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="1" y="6" width="22" height="12" rx="2"/>
+      </svg>Wide (2×1)
+    </button>
+    <button class="ctx-item" onclick="menuResizeTile('tall')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="6" y="1" width="12" height="22" rx="2"/>
+      </svg>Tall (1×2)
+    </button>
+    <button class="ctx-item" onclick="menuResizeTile('large')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="2" width="20" height="20" rx="2"/>
+        <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+      </svg>Large (2×2)
+    </button>
+  </div>
+</div>
+
+<!-- Quick-add tile modal -->
+<div id="quick-add-overlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:520px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <span class="modal-title">Add tile to dashboard</span>
+      <button class="icon-btn" id="qa-close">✕</button>
+    </div>
+
+    <!-- Existing vs New tabs -->
+    <div style="display:flex;gap:2px;padding:14px 20px 0;border-bottom:1px solid var(--border);">
+      <button id="qa-tab-existing" class="qa-source-tab active" onclick="qaSwitchSource('existing')">
+        Existing Device
+      </button>
+      <button id="qa-tab-new" class="qa-source-tab" onclick="qaSwitchSource('new')">
+        New Device
+      </button>
+    </div>
+
+    <!-- EXISTING DEVICE PANE: checkbox list of all devices not yet on this user's dashboard -->
+    <div id="qa-pane-existing" style="padding:16px 20px;">
+      <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">
+        Tick devices to show them on your dashboard. Unticking hides a tile without deleting the device
+        (it keeps monitoring in the background).
+      </p>
+      <input id="qa-existing-filter" type="text" placeholder="Filter by name or host..."
+             style="width:100%;margin-bottom:10px;background:var(--bg-input);border:1px solid var(--border);
+                    border-radius:var(--radius-sm);padding:7px 12px;color:var(--text-primary);font-size:13px;">
+      <div id="qa-existing-list" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+        <div style="color:var(--text-muted);font-size:13px;padding:12px 0;">Loading devices...</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button id="qa-existing-apply" class="btn primary" style="flex:1;">Apply changes</button>
+        <button class="btn secondary" onclick="closeQuickAdd()">Close</button>
+      </div>
+    </div>
+
+    <!-- NEW DEVICE PANE: original device-creation form -->
+    <div id="qa-pane-new" style="display:none;padding:16px 20px;flex-direction:column;gap:10px;">
+      <p style="font-size:12.5px;color:var(--text-muted);">Create a brand-new device to monitor.
+        Full options (SNMP, escalation, thresholds) available on the Devices page after creation.</p>
+      <div class="field">
+        <label>Type</label>
+        <select id="qa-kind">
+          <option value="server_ping">Network device / server (Ping)</option>
+          <option value="server_windows">Windows server (PowerShell)</option>
+          <option value="server_ssh">Linux server (SSH)</option>
+          <option value="shared_drive_windows">Shared drive (Windows)</option>
+          <option value="shared_drive_linux">Shared drive (Linux)</option>
+          <option value="url">Web application URL</option>
+        </select>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>ID <span style="color:var(--text-muted);font-size:11px">(unique, no spaces)</span></label>
+          <input id="qa-id" type="text" placeholder="e.g. core-switch-01">
+        </div>
+        <div class="field">
+          <label>Display name</label>
+          <input id="qa-name" type="text" placeholder="Core Switch 01">
+        </div>
+      </div>
+      <div class="field">
+        <label>Host / IP / URL</label>
+        <input id="qa-host" type="text" placeholder="192.168.1.1 or https://example.com">
+      </div>
+      <div class="field" id="qa-path-field" style="display:none;">
+        <label>Path (UNC or mount)</label>
+        <input id="qa-path" type="text" placeholder="\\server\share or /mnt/share">
+      </div>
+      <div id="qa-cred-fields"></div>
+      <div id="qa-metric-fields"></div>
+      <div style="display:flex;gap:10px;margin-top:6px;">
+        <button id="qa-submit" class="btn primary" style="flex:1;">Add &amp; monitor</button>
+        <button id="qa-cancel" class="btn secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.qa-source-tab {
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--text-secondary);font-size:13px;font-weight:600;
+  padding:8px 16px;cursor:pointer;transition:color .15s,border-color .15s;
+}
+.qa-source-tab:hover { color:var(--text-primary); }
+.qa-source-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.qa-existing-row {
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);
+  transition:background .1s;
+}
+.qa-existing-row:hover { background:var(--bg-hover); }
+.qa-existing-row input[type=checkbox] { width:16px;height:16px;cursor:pointer;flex-shrink:0; }
+.qa-existing-meta { font-size:11px;color:var(--text-muted);margin-left:auto;white-space:nowrap; }
+.qa-cat-group { margin-bottom:14px; }
+.qa-cat-group-hdr {
+  font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+  letter-spacing:.5px;padding:4px 10px;margin-bottom:2px;
+  display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);
+}
+.qa-cat-count {
+  background:var(--bg-hover);color:var(--text-secondary);border-radius:9px;
+  padding:0 6px;font-size:10px;font-weight:700;
+}
+</style>
+
+
+    </main>
+  </div>
+
+  <footer class="app-footer">
+    <span>© 2024–2026 Net-monit V11.3 — Developed by <a href="mailto:abuabdullah.be@outlook.com" style="color:var(--accent)">Abdullah</a> — InfoXtek.com</span>
+  </footer>
+
+  <script src="static/js/auth.js"></script>
+  <script>
+  // V8.5: organisation branding. V8.8 fix: this used to REPLACE the
+  // default Net-monit name/logo in the top bar -- app identity is meant
+  // to be static and non-configurable, so it now shows the admin-set org
+  // name/logo as a SEPARATE, additive element in the top bar's right side
+  // instead, alongside the (always-visible) Net-monit brand on the left.
+  // Falls back to nothing shown if no org branding is configured yet, so
+  // a fresh install just shows the plain Net-monit top bar.
+  (function(){
+    fetch("/api/settings/organisation").then(r=>r.json()).then(d=>{
+      if(!d || (!d.name && !d.logo_path)) return;  // nothing configured -- nothing extra to show
+      const brandOrg = document.getElementById("brand-org");
+      const orgLogo  = document.getElementById("brand-org-logo");
+      const orgName  = document.getElementById("brand-org-name");
+      if(brandOrg){ brandOrg.style.display = "inline-flex"; brandOrg.classList.remove("hidden"); }
+      if(d.logo_path && orgLogo){ orgLogo.src = d.logo_path; orgLogo.alt = d.name || "Logo"; orgLogo.style.display = ""; }
+      if(d.name && orgName){ orgName.textContent = d.name; if(d.color) orgName.style.color = d.color; }
+    }).catch(()=>{});
+  })();
+  // License state banner
+  (function(){
+    fetch("/api/license/status").then(r=>r.json()).then(d=>{
+      const restricted = d.state==="expired"||d.state==="invalid";
+      const trial = d.state==="trial";
+      // Show license nav link when restricted or trial expiring soon
+      if(restricted || (trial && d.trial_days_remaining<=7)){
+        document.getElementById("nav-license") && (document.getElementById("nav-license").style.display="");
+        document.getElementById("sidebar-license") && (document.getElementById("sidebar-license").style.display="");
+      }
+      if(restricted){
+        document.getElementById("sidebar-license-label") && (document.getElementById("sidebar-license-label").textContent="⚠ License");
+        // Show banner
+        const banner = document.createElement("div");
+        banner.id = "license-banner";
+        banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#b22222;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;";
+        banner.innerHTML = '⚠ License Expired — Monitoring data is restricted. <a href="activation.html" style="color:#ffe;text-decoration:underline;margin-left:8px;">Activate Now →</a>';
+        document.body.prepend(banner);
+        document.querySelector(".topbar") && (document.querySelector(".topbar").style.top="36px");
+      } else if(trial && d.trial_days_remaining<=7){
+        const banner = document.createElement("div");
+        banner.id = "license-banner";
+        banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#b8860b;color:#fff;text-align:center;padding:7px 16px;font-size:13px;";
+        banner.innerHTML = '⏱ Trial expires in <strong>'+d.trial_days_remaining+' day(s)</strong>. <a href="activation.html" style="color:#ffe;text-decoration:underline;margin-left:8px;">Enter License Key →</a>';
+        document.body.prepend(banner);
+        document.querySelector(".topbar") && (document.querySelector(".topbar").style.top="33px");
+      }
+    }).catch(()=>{});
+  })();
+
+  // V7.2: sidebar Alert Event Logs open-count badge, refreshed on every page
+  (function pollAlertBadge(){
+    function tick(){
+      fetch("/api/alerts/count").then(r=>r.json()).then(d=>{
+        const b = document.getElementById("sidebar-alert-badge");
+        if (!b) return;
+        if (d.open > 0) { b.style.display=""; b.textContent = d.open; }
+        else { b.style.display="none"; }
+      }).catch(()=>{});
+    }
+    tick();
+    setInterval(tick, 20000);
+  })();
+  </script>
+  
+
+<!-- V11.3 patch 04: device window (double-click a tile) -->
+<div id="ds-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ds-title">
+  <div class="modal ds-box">
+    <div class="ds-head">
+      <div><h2 id="ds-title" style="margin:0 0 2px">Device</h2><div id="ds-sub" class="ds-sub"></div></div>
+      <button type="button" id="ds-x" class="btn secondary small" aria-label="Close" onclick="closeDeviceSettings()">&times;</button>
+    </div>
+    <div id="ds-body"><div style="color:var(--text-muted)">Loading&hellip;</div></div>
+  </div>
+</div>
+<script src="static/js/threshold_ui.js"></script>
+<script src="static/js/dashboard.js"></script>
+
+</body>
+</html>
