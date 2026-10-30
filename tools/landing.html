@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Net-monit: self-hosted network and infrastructure monitoring, with a live demo</title>
+<meta name="description" content="Net-monit monitors devices, servers and websites with ping, SNMP, SSH, PowerShell and HTTP checks, alerts by email, SMS and call, and runs on your own server. Try the full live demo in your browser.">
+<link rel="icon" href="demo/static/img/favicon.svg">
+<style>
+:root{--bg:#0b1220;--bg2:#0f1a2e;--card:#14223b;--bd:#26395c;--tx:#dbe7fb;--mu:#93a9cc;--pri:#3b82f6;--acc:#22d3ee;--am:#f59e0b}
+@media(prefers-color-scheme:light){:root{--bg:#f5f8fd;--bg2:#e9f0fb;--card:#fff;--bd:#d3deef;--tx:#14213a;--mu:#51647f;--pri:#1d4ed8;--acc:#0e7490;--am:#b45309}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 system-ui,Segoe UI,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:0 20px}a{color:var(--acc)}
+nav{position:sticky;top:0;background:var(--bg2);border-bottom:1px solid var(--bd);z-index:5}nav .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 20px}
+.brand{font-weight:800;letter-spacing:.05em}.brand span{color:var(--acc)}nav .l{margin-left:auto;display:flex;gap:14px;flex-wrap:wrap;font-size:14px}nav a{text-decoration:none;color:var(--tx)}
+.cta{background:var(--pri);color:#fff!important;padding:6px 14px;border-radius:6px;font-weight:600}
+.hero{padding:64px 0 40px;background:radial-gradient(900px 400px at 70% -10%,#1d4ed855,transparent)}h1{font-size:clamp(30px,5vw,50px);line-height:1.15;margin:0 0 14px}h1 em{color:var(--acc);font-style:normal}
+.lead{font-size:18px;color:var(--mu);max-width:760px}.btns{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}
+.btn{padding:11px 20px;border-radius:8px;border:1px solid var(--bd);text-decoration:none;color:var(--tx);font-weight:600;background:var(--card)}.btn.p{background:var(--pri);border-color:var(--pri);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:26px}.stat{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}.stat b{font-size:28px;display:block;color:var(--acc)}.stat span{color:var(--mu);font-size:13px}
+.note{background:var(--card);border:1px solid var(--am);border-radius:10px;padding:14px 16px;margin-top:26px;font-size:15px}
+section{padding:54px 0}section.alt{background:var(--bg2)}h2{font-size:30px;margin:0 0 6px}.sub{color:var(--mu);margin:0 0 24px;max-width:760px}
+.grid{display:grid;gap:16px}.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px}.card h3{margin:0 0 6px;font-size:18px}.card p,.card li{color:var(--mu);font-size:15px}.card ul{padding-left:18px;margin:8px 0 0}
+code{background:var(--bg2);border:1px solid var(--bd);border-radius:4px;padding:1px 6px;font-size:13px}pre{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:12px;overflow:auto;font-size:13px}
+.arch{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}.node{flex:1 1 170px;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;text-align:center}.node b{display:block}.node small{color:var(--mu)}.arrow{align-self:center;color:var(--acc);font-size:12px;text-align:center}
+.steps{counter-reset:s;display:grid;gap:10px}.step{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px 14px 12px 52px;position:relative;color:var(--mu)}.step:before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:12px;width:26px;height:26px;border-radius:50%;background:var(--pri);color:#fff;text-align:center;font-weight:700;line-height:26px}.step b{color:var(--tx)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid var(--bd);padding:8px;text-align:left;vertical-align:top}th{color:var(--mu)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.chip{padding:5px 12px;border-radius:99px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer;font-size:13px}.chip.on{background:var(--pri);border-color:var(--pri);color:#fff}
+#q{width:100%;padding:11px 14px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:15px}
+.ref{border:1px solid var(--bd);border-radius:10px;margin-top:12px;background:var(--card)}.ref h4{margin:0;padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;gap:8px}.ref h4 a{font-size:13px;font-weight:400}
+.it{padding:9px 14px;border-bottom:1px solid var(--bd)}.it:last-child{border:0}.it b{display:block}.it span{color:var(--mu);font-size:14px}.sec{padding:6px 14px;background:var(--bg2);color:var(--am);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+footer{padding:30px 0;border-top:1px solid var(--bd);color:var(--mu);font-size:14px}
+</style></head><body>
+<nav><div class="wrap"><div class="brand">NET<span>-MONIT</span></div><div class="l"><a href="#how">How it works</a><a href="#monitors">What it monitors</a><a href="#alerts">Alerting</a><a href="#ref">Every option explained</a><a href="#try">Try it</a><a href="#install">Install</a><a href="#versions">Versions</a><a href="https://github.com/MohamedAbdullahKhan/Net-Monit" target="_blank" rel="noopener">GitHub</a><a class="cta" href="demo/">Live demo</a></div></div></nav>
+<header class="hero"><div class="wrap"><h1>Know what is down <em>before your users do.</em></h1>
+<p class="lead">Net-monit is a self-hosted monitoring platform for networks, servers and websites. It checks your devices on a schedule, shows them on a live dashboard, and alerts the right people by email, SMS or voice call, with escalation. It runs on your own machine. No cloud, no account, no phone-home.</p>
+<div class="btns"><a class="btn p" href="demo/">&#9654; Open the live demo</a><a class="btn" href="#ref">Read every option explained</a><a class="btn" href="#try">Guided scenarios</a></div>
+<div class="stats"><div class="stat"><b>6</b><span>check methods: Ping, SNMP, SSH, PowerShell, Disk/Share, HTTP</span></div><div class="stat"><b>13</b><span>device types</span></div><div class="stat"><b>3</b><span>escalation levels (L1 to L3)</span></div><div class="stat"><b>10</b><span>pages, all in the demo</span></div><div class="stat"><b id="nItems">200+</b><span>options explained below</span></div></div>
+<p class="note"><b>About the demo:</b> GitHub Pages hosts static files only, so the demo runs the project's <b>real web interface</b> (the actual pages, styles and scripts) with a browser-side stand-in for the server and <b>invented data</b>. Everything responds: add a device, change a threshold and watch an alert fire, run a speed test, scan a subnet, activate a license. <b>Nothing is sent to any real device and nothing leaves your browser</b> (the "Test Your PC Speed" test really measures your connection to Cloudflare). Use <b>Explain mode</b> and <b>Page guide</b> in the bottom bar to read what every control does.</p></div></header>
+
+<section id="how"><div class="wrap"><h2>How it works</h2><p class="sub">One small web service on a server you own. It polls your devices, stores results in a local database, and serves the dashboard.</p>
+<div class="arch"><div class="node"><b>Your browser</b><small>dashboard, settings, alerts</small></div><div class="arrow">&#8594;<br>HTTP</div><div class="node"><b>Net-monit service</b><small>Python + Flask + SQLite<br>scheduler, alert engine, encrypted credentials</small></div><div class="arrow">&#8594;<br>ICMP / SNMP / SSH / WinRM / HTTP</div><div class="node"><b>Your devices and sites</b><small>routers, switches, firewalls, servers, NAS, websites</small></div><div class="arrow">&#8594;<br>SMTP / HTTP</div><div class="node"><b>People</b><small>email, SMS, voice call</small></div></div>
+<div class="grid g3" style="margin-top:22px"><div class="card"><h3>1. Add monitors</h3><p>Type an IP or URL, pick a device type and a check method, or scan a subnet and add what it finds.</p></div><div class="card"><h3>2. Set thresholds</h3><p>Warning and critical limits per metric, globally, per type, per method or per device. Sensible values are one click away.</p></div><div class="card"><h3>3. Get alerted</h3><p>Alerts confirm before firing, repeat politely, escalate to support and managers, and close themselves on recovery.</p></div></div></div></section>
+
+<section id="monitors" class="alt"><div class="wrap"><h2>What it monitors</h2><p class="sub">Each device gets one check method. The method decides what is measured.</p>
+<div class="card" style="overflow:auto"><table><tr><th>Method</th><th>Best for</th><th>What you get</th></tr>
+<tr><td>Ping (ICMP)</td><td>Anything with an IP</td><td>Up or down, latency, packet loss</td></tr>
+<tr><td>SNMP</td><td>Switches, routers, firewalls, printers, UPS</td><td>Adds CPU, bandwidth, interface data, uptime, device type</td></tr>
+<tr><td>PowerShell</td><td>Windows servers</td><td>CPU, memory, disk, Windows services, scheduled tasks</td></tr>
+<tr><td>SSH</td><td>Linux servers</td><td>CPU, memory, disk, remote commands</td></tr>
+<tr><td>Disk / Shared folder</td><td>NAS, file servers</td><td>Free and used space of a UNC or mounted path</td></tr>
+<tr><td>HTTP / HTTPS</td><td>Websites and web apps</td><td>Status code, response time, DNS, TCP connect, SSL handshake, SSL days left, keyword match</td></tr></table></div>
+<p class="sub" style="margin-top:14px">Device types: Network device, Router, Switch, Firewall, Wireless AP, Windows server, Linux server, VMware host, NAS, Printer, UPS, IP camera, Other. The type decides the dashboard tab and which thresholds apply.</p></div></section>
+
+<section id="alerts"><div class="wrap"><h2>How alerting works</h2><p class="sub">Built to avoid false alarms and alert fatigue.</p>
+<div class="steps"><div class="step"><b>Check.</b> Each device is polled on its own interval (default 30 seconds).</div><div class="step"><b>Evaluate.</b> Every metric is compared with its thresholds. The most specific rule wins: device override, then check method, then device type, then global, then built-in defaults.</div><div class="step"><b>Confirm.</b> A problem must last the configured wait (default sustained) before an alert is sent. A device is only declared Offline after several failed checks in a row, with re-checks in between.</div><div class="step"><b>Notify.</b> Level 1 goes to the admin group. Level 2 adds the support group, level 3 the managers, each after its own delay, by email, SMS and voice call.</div><div class="step"><b>Control.</b> Acknowledge to silence repeats, Resolve to close, or let recovery close it. A recovery notice is sent. Every action is written to the audit log.</div></div></div></section>
+
+<section id="ref" class="alt"><div class="wrap"><h2>Every page and option, explained</h2><p class="sub">The same text you get inside the demo with Explain mode. Search, or filter by page. Open a page in the demo from its heading.</p>
+<input id="q" placeholder="Search all options, for example: cooldown, SSL, token, backup..."><div class="chips" id="chips"></div><div id="refbody"></div></div></section>
+
+<section id="try"><div class="wrap"><h2>Guided scenarios</h2><p class="sub">One click opens the demo on the right page with a hint bar explaining what to try.</p><div class="grid g3" id="scen"></div></div></section>
+
+<section id="install" class="alt"><div class="wrap"><h2>Install the real thing</h2><p class="sub">Free. Runs on Windows or Linux. Source: <a href="https://github.com/MohamedAbdullahKhan/Net-Monit">github.com/MohamedAbdullahKhan/Net-Monit</a></p>
+<div class="grid g3"><div class="card"><h3>Windows</h3><p>Right-click <code>Setup.bat</code>, Run as administrator. A wizard installs the files, registers the Windows service and opens the dashboard.</p></div><div class="card"><h3>Linux</h3><pre>chmod +x setup.sh
+sudo bash setup.sh</pre><p>Registers a systemd service.</p></div><div class="card"><h3>Manual, any OS</h3><pre>pip install -r requirements.txt
+python app.py</pre><p>Port comes from <code>NETMON_PORT</code> or <code>config.yaml</code>.</p></div></div>
+<div class="card" style="margin-top:16px"><h3>First login</h3><p>On first start Net-monit creates an admin account <code>admin@email.com</code> with a <b>random token</b> and saves it in <code>data/FIRST-RUN-ADMIN-TOKEN.txt</code>. Log in with it, then change it in the Admin Panel. The file is deleted at first login.</p></div>
+<div class="card" style="margin-top:16px"><h3>Licensing</h3><p>30-day trial, no key needed. After that the license is free: copy your Device ID and Activation Code from the License page, send both to <a href="mailto:abuabdullah.be@outlook.com">abuabdullah.be@outlook.com</a> or <a href="https://infoxtek.com">infoxtek.com</a>, and paste the key you receive (4 to 7 business days). Keys are Ed25519-signed and verified offline.</p></div></div></section>
+
+<section id="versions"><div class="wrap"><h2>Version history (V11.3 line)</h2><div class="card" style="overflow:auto"><table><tr><th>Patch</th><th>What changed</th></tr>
+<tr><td>V11.3 base</td><td>Offline Ed25519 licensing, built-in speed test with live gauge, per-type site thresholds, SMS and voice-call alerts, setup wizard.</td></tr>
+<tr><td>Patch 01</td><td>License key accepted from Settings; patch system added.</td></tr>
+<tr><td>Patch 02</td><td>Global thresholds now reach the live alert engine.</td></tr>
+<tr><td>Patch 03</td><td>No more false OFFLINE alerts.</td></tr>
+<tr><td>Patch 04</td><td>Type and method filters; per-type thresholds.</td></tr>
+<tr><td>Patch 05</td><td>Fixed a page freeze; type-specific metrics; Devices page filters and grouping.</td></tr></table></div></div></section>
+
+<section class="alt"><div class="wrap"><h2>Honest limits of the demo</h2><ul><li>No real ping, SNMP, SSH, PowerShell, scanning, email, SMS or voice. All data is invented and resets when you press Reset demo or close the tab.</li><li>License keys are only format-checked here. The real app verifies the Ed25519 signature.</li><li>Logo and background uploads are not kept.</li></ul></div></section>
+<footer><div class="wrap">&copy; 2024-2026 Abdullah &middot; <a href="mailto:abuabdullah.be@outlook.com">abuabdullah.be@outlook.com</a> &middot; <a href="https://infoxtek.com">infoxtek.com</a></div></footer>
+<script src="demo/static/js/guide-data.js"></script>
+<script>
+const G=window.GUIDE,$=s=>document.querySelector(s),pages=Object.entries(G.pages);let cur="all";
+$("#nItems").textContent=pages.reduce((a,[,p])=>a+p.sections.reduce((b,s)=>b+s.items.length,0),0);
+$("#chips").innerHTML=[["all",{title:"All pages"}],...pages].map(([k,p])=>`<span class="chip${k==="all"?" on":""}" data-k="${k}">${p.title}</span>`).join("");
+$("#chips").onclick=e=>{const c=e.target.closest(".chip");if(!c)return;cur=c.dataset.k;document.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===c));draw()};
+$("#q").oninput=draw;
+function draw(){const q=$("#q").value.toLowerCase();let h="";
+ pages.forEach(([k,p])=>{if(cur!=="all"&&cur!==k)return;let s="";
+  p.sections.forEach(sec=>{const it=sec.items.filter(i=>!q||(i[1]+i[2]+p.title).toLowerCase().includes(q));if(it.length)s+=`<div class="sec">${sec.h}</div>`+it.map(i=>`<div class="it"><b>${i[1]}</b><span>${i[2]}</span></div>`).join("")});
+  if(s)h+=`<div class="ref"><h4><span>${p.title}</span><a href="demo/${k==="index"?"":k+".html"}">open in demo</a></h4><div class="it"><span>${p.intro}</span></div>${s}</div>`});
+ $("#refbody").innerHTML=h||"<p>No match.</p>"}
+draw();
+$("#scen").innerHTML=Object.entries(G.scenarios).map(([k,s])=>`<div class="card"><h3>${s.label}</h3><p>${s.hint.replace(/<\/?b>/g,"").replace(/<\/?i>/g,"").split(" - ")[1]||""}</p><a class="btn" href="demo/${s.page==="index.html"?"":s.page}${s.page==="index.html"?"?":"?"}scenario=${k}">Try it</a></div>`).join("");
+</script></body></html>

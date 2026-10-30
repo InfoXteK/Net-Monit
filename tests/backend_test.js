@@ -1,0 +1,24 @@
+const {JSDOM,VirtualConsole}=require('jsdom');const base='http://localhost:50114/';
+(async()=>{
+ const d=await JSDOM.fromURL(base+'index.html',{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true,virtualConsole:new VirtualConsole(),beforeParse(w){w.fetch=(u,o)=>fetch(new URL(u,w.location.href),o);w.Response=Response;w.Headers=Headers;w.matchMedia=()=>({matches:false,addListener(){},addEventListener(){}})}});
+ const w=d.window;await new Promise(r=>setTimeout(r,2000));
+ const H={'X-Session-Token':'demo-session','Content-Type':'application/json'};
+ const f=async(m,u,b)=>{const r=await w.fetch(u,{method:m,headers:H,body:b?JSON.stringify(b):undefined});return [r.status,await r.json()]};
+ console.log('add device     ',JSON.stringify((await f('POST','/api/devices',{id:'t1',name:'Test Switch',host:'10.9.9.9',type:'switch',method:'ping'}))[1]));
+ let s=(await f('GET','/api/status'))[1];console.log('status total   ',s.summary.total,'has t1:',s.devices.some(x=>x.device_id==='t1'));
+ console.log('bad threshold  ',JSON.stringify((await f('POST','/api/devices/t1/thresholds',{thresholds:{latency_ms:{warning:500,critical:100,enabled:true}}}))));
+ console.log('ssl wrong dir  ',(await f('POST','/api/settings/thresholds',{ssl_days_left:{warning:5,critical:20,enabled:true}}))[1].error);
+ const before=(await f('GET','/api/alerts/count'))[1].open;
+ console.log('lower latency thr -> device override',JSON.stringify((await f('POST','/api/devices/t1/thresholds',{thresholds:{latency_ms:{warning:1.2,critical:2,enabled:true}}}))[1]));
+ await f('GET','/api/status');const al=(await f('GET','/api/alerts/active?limit=300'))[1];
+ console.log('alerts',before,'->',al.filter(a=>a.status!=='resolved').length,'| new:',al.filter(a=>a.device_id==='t1').map(a=>a.severity+' '+a.message));
+ const a0=al[0];console.log('ack',JSON.stringify((await f('POST','/api/alerts/'+a0.id+'/acknowledge'))[1]),(await f('GET','/api/alerts/active?limit=300'))[1].find(a=>a.id===a0.id).status);
+ console.log('delete t1      ',JSON.stringify((await f('DELETE','/api/devices/t1'))[1]),(await f('GET','/api/status'))[1].summary.total);
+ const job=(await f('POST','/api/speedtest/run-async'))[1];await new Promise(r=>setTimeout(r,4500));console.log('speed @4.5s    ',JSON.stringify((await f('GET','/api/speedtest/status/'+job.job_id))[1]).slice(0,150));
+ const sc=(await f('POST','/api/networkscan/scan',{subnet:'192.168.50.0/24'}))[1];console.log('scan start     ',JSON.stringify(sc));
+ console.log('license bad    ',(await f('POST','/api/license/activate',{license_key:'abc'}))[1].message.slice(0,60));
+ console.log('license good   ',(await f('POST','/api/license/activate',{license_key:'NM1-'+'ABCD-'.repeat(25)}))[1].message,(await f('GET','/api/license/status'))[1].state);
+ console.log('url check      ',(await f('POST','/api/urlmonitor/check',{url:'https://example.com'}))[1].status_code);
+ const anon=await w.fetch('/api/status',{headers:{}});const aj=await anon.json();console.log('viewer view    ',aj.role,aj.devices[0].host);
+ console.log('users add      ',JSON.stringify((await f('POST','/api/admin/users',{email:'bob@x.com',role:'user',token:'Abcdef12'}))[1]),(await f('GET','/api/admin/users'))[1].length);
+ process.exit(0)})();
